@@ -81,6 +81,15 @@ async function loadMe(){
   qsa("[data-admin-auditor-only]").forEach(a=>{
     a.hidden = !["admin","auditor"].includes(me.role);
   });
+  // Admin o contador: sección de revisión de pagos.
+  qsa("[data-admin-contador-only]").forEach(a=>{
+    a.hidden = !["admin","contador"].includes(me.role);
+  });
+  // Operacional-only: solo visible para operador y jefe_estacion.
+  // Contador y auditor no participan en el registro diario de operaciones.
+  qsa("[data-operacional-only]").forEach(a=>{
+    a.hidden = !["operador","jefe_estacion"].includes(me.role);
+  });
   // station blocked banner
   const blocked = (me.role !== "admin") && (me.monthly_status === "view_only" || me.monthly_status === "expired");
   const banner = qs("#blocked-banner");

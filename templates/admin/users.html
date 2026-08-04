@@ -154,30 +154,6 @@
   </form>
 </dialog>
 
-<dialog id="dlgAccess">
-  <form method="dialog" class="dlgform" id="accessForm">
-    <h3 style="margin:0 0 10px 0;">Accesos por estación</h3>
-    <div class="help" id="accessMeta"></div>
-
-    <div class="card" style="margin-top:10px;">
-      <div style="display:flex;gap:10px;justify-content:space-between;align-items:center;flex-wrap:wrap;">
-        <div><b>Selecciona estaciones</b> <span class="help">(si está vacío, solo aplica la estación asignada en el usuario)</span></div>
-        <div style="display:flex;gap:10px;">
-          <button class="btn" type="button" id="accessAll">Todas</button>
-          <button class="btn" type="button" id="accessNone">Ninguna</button>
-        </div>
-      </div>
-      <div id="accessList" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:10px;"></div>
-    </div>
-
-    <div id="accessErr" class="help" style="color:var(--hme-danger);font-weight:900;margin-top:10px;" hidden></div>
-
-    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
-      <button class="btn ghost" value="cancel">Cerrar</button>
-      <button class="btn primary" id="accessSave" value="ok">Guardar</button>
-    </div>
-  </form>
-</dialog>
 
 {% endblock %}
 {% block scripts %}

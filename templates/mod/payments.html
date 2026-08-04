@@ -1,5 +1,72 @@
 {% extends "layout.html" %}
-{% block head %}{% endblock %}
+{% block head %}
+<style>
+  /* ── Status badge ───────────────────────────────────────────────── */
+  .pay-status-card{
+    display:flex; align-items:center; gap:16px;
+    padding:18px 20px; border-radius:14px;
+    border:1px solid var(--hme-border,rgba(15,23,42,.09));
+    background:#fff; margin-bottom:16px;
+  }
+  .pay-status-icon{
+    width:44px; height:44px; border-radius:12px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .pay-status-icon svg{ width:22px; height:22px; stroke-width:2.2; stroke-linecap:round; stroke-linejoin:round; fill:none; }
+  .pay-status-badge{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 12px; border-radius:999px;
+    font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+  }
+  .pay-status-badge.pending { background:rgba(245,158,11,.12); color:#92400e; }
+  .pay-status-badge.validated{ background:rgba(22,163,74,.10); color:#166534; }
+  .pay-status-badge.rejected { background:rgba(239,68,68,.10); color:#991b1b; }
+  .pay-status-badge.none     { background:rgba(100,116,139,.09); color:#475569; }
+
+  /* ── History table ──────────────────────────────────────────────── */
+  .pay-pill{
+    display:inline-block; padding:3px 10px; border-radius:999px;
+    font-size:10.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase;
+    white-space:nowrap;
+  }
+  .pay-pill.pending  { background:rgba(245,158,11,.12); color:#92400e; }
+  .pay-pill.validated{ background:rgba(22,163,74,.10);  color:#166534; }
+  .pay-pill.rejected { background:rgba(239,68,68,.10);  color:#991b1b; }
+
+  .pay-action-btn{
+    display:inline-flex; align-items:center; gap:5px;
+    padding:4px 10px; border-radius:7px; border:1px solid;
+    font-size:11.5px; font-weight:800; cursor:pointer;
+    background:transparent; transition:background .14s, color .14s;
+    line-height:1.3;
+  }
+  .pay-action-btn svg{ width:13px; height:13px; stroke-width:2.5; stroke-linecap:round; stroke-linejoin:round; fill:none; }
+  .pay-action-btn.validate{ border-color:rgba(22,163,74,.4); color:#166534; }
+  .pay-action-btn.validate:hover{ background:rgba(22,163,74,.10); }
+  .pay-action-btn.reject  { border-color:rgba(239,68,68,.35); color:#991b1b; }
+  .pay-action-btn.reject:hover { background:rgba(239,68,68,.08); }
+
+  /* ── Invoice modal ──────────────────────────────────────────────── */
+  #dlgInvoice{ border:none; border-radius:16px; padding:0; width:420px; max-width:95vw; box-shadow:0 24px 64px rgba(2,6,23,.18); }
+  #dlgInvoice::backdrop{ background:rgba(2,6,23,.45); }
+  .dlg-header{ padding:18px 20px 14px; border-bottom:1px solid var(--hme-border,rgba(15,23,42,.09)); }
+  .dlg-header h3{ margin:0; font-size:16px; font-weight:900; }
+  .dlg-body{ padding:16px 20px; display:grid; gap:12px; }
+  .dlg-footer{ padding:12px 20px 16px; display:flex; gap:10px; justify-content:flex-end;
+    border-top:1px solid var(--hme-border,rgba(15,23,42,.09)); }
+
+  /* ── Upload zone ────────────────────────────────────────────────── */
+  .upload-hint{
+    font-size:12px; color:var(--hme-text-soft,#64748b);
+    margin-top:4px;
+  }
+
+  .pay-empty{
+    text-align:center; padding:32px 20px;
+    color:var(--hme-text-soft,#64748b); font-size:13px;
+  }
+</style>
+{% endblock %}
 {% block content %}
 <div class="pagehead">
   <div>
@@ -7,9 +74,14 @@
     <div class="sub">Envío de comprobante, revisión y entrega de factura.</div>
   </div>
 </div>
-<div class="card" data-export-bar style="margin-top:12px;" data-admin-auditor-only hidden>
-  <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;">
-    <div><b>Exportación</b> <span class="help">Descarga de datos para auditoría/analítica.</span></div>
+
+{# ── Barra de exportación (admin/auditor) ──────────────────────── #}
+<div class="card" data-export-bar style="margin-bottom:0;" data-admin-auditor-only hidden>
+  <div style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+    <div>
+      <span style="font-weight:900;">Exportación</span>
+      <span class="help" style="margin-left:6px;">Descarga de datos para auditoría / analítica.</span>
+    </div>
     <div style="display:flex;gap:10px;">
       <a class="btn" href="/api/export/payments.csv">CSV</a>
       <a class="btn" href="/api/export/payments.xlsx">Excel</a>
@@ -17,58 +89,106 @@
   </div>
 </div>
 
+{# ── Card de estado del periodo actual ─────────────────────────── #}
+<div class="pay-status-card" id="payStatusCard" style="margin-top:16px;">
+  <div class="pay-status-icon" id="payStatusIcon" style="background:rgba(100,116,139,.08);">
+    <svg viewBox="0 0 24 24" stroke="#64748b"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+  </div>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:12px;color:var(--hme-text-soft,#64748b);font-weight:700;text-transform:uppercase;letter-spacing:.07em;">Estado del periodo actual</div>
+    <div id="payStatusLabel" style="margin-top:4px;font-weight:900;font-size:15px;">Cargando…</div>
+    <div id="payStatusMeta" class="help" style="margin-top:3px;"></div>
+  </div>
+  <div>
+    <span class="pay-status-badge none" id="payStatusBadge">—</span>
+  </div>
+</div>
 
-<div class="grid cols-2">
-  <div class="card">
-    <div style="font-weight:900;">Enviar comprobante de pago</div>
-    <div class="help">Si la estación está en modo vista, aquí es donde puede reactivarse enviando su comprobante.</div>
-    <form id="payProof" style="display:grid;gap:10px;margin-top:10px;">
+<div class="grid cols-2" style="margin-top:4px;">
+
+  {# ── Enviar comprobante (solo jefe/operador) ─────────────────── #}
+  <div class="card" data-operacional-only hidden>
+    <div style="font-weight:900;font-size:14.5px;">Enviar comprobante de pago</div>
+    <div class="help" style="margin-top:4px;">Adjunta el comprobante de tu estación para activar la revisión del contador.</div>
+    <form id="payProof" style="display:grid;gap:12px;margin-top:14px;">
       <div class="formrow">
         <div>
-          <div class="help">Inicio periodo</div>
+          <div class="help">Inicio de periodo</div>
           <input class="input" type="date" id="payPeriodStart" name="period_start"
             readonly style="background:var(--hme-bg-soft,#f1f5f9);color:var(--hme-text-soft,#94a3b8);cursor:not-allowed;pointer-events:none;">
         </div>
         <div>
-          <div class="help">Fin periodo</div>
+          <div class="help">Fin de periodo</div>
           <input class="input" type="date" id="payPeriodEnd" name="period_end"
             readonly style="background:var(--hme-bg-soft,#f1f5f9);color:var(--hme-text-soft,#94a3b8);cursor:not-allowed;pointer-events:none;">
         </div>
       </div>
-      <div><div class="help">Comprobante (foto/PDF)</div><input class="input" type="file" name="proof" required></div>
-      <div class="formactions"><button class="btn primary" type="submit">Enviar</button></div>
+      <div>
+        <div class="help">Comprobante de pago</div>
+        <input class="input" type="file" name="proof" accept=".pdf,.jpg,.jpeg,.png" required>
+        <div class="upload-hint">Formatos aceptados: PDF, JPG, PNG</div>
+      </div>
+      <div class="formactions">
+        <button class="btn primary" type="submit">Enviar comprobante</button>
+      </div>
       <div id="payErr" class="help" style="color:var(--hme-danger);font-weight:900;" hidden></div>
     </form>
-
-    <div data-admin-only hidden style="margin-top:14px;">
-      <div style="font-weight:900;">Revisión (admin/contador)</div>
-      <div class="help">Valida y adjunta la factura generada externamente.</div>
-      <form id="payReview" style="display:grid;gap:10px;margin-top:10px;">
-        <div class="formrow">
-          <div><div class="help">ID pago</div><input class="input" name="payment_id" placeholder="Ej. 10" required></div>
-          <div>
-            <div class="help">Acción</div>
-            <select name="status">
-              <option value="validated">Validar</option>
-              <option value="rejected">Rechazar</option>
-            </select>
-          </div>
-        </div>
-        <div><div class="help">Factura (solo si validas)</div><input class="input" type="file" name="invoice"></div>
-        <div class="formactions"><button class="btn primary" type="submit">Aplicar</button></div>
-      </form>
-    </div>
   </div>
 
+  {# ── Historial ─────────────────────────────────────────────── #}
   <div class="card">
-    <div style="font-weight:900;">Historial</div>
-    <div class="tablewrap" style="margin-top:10px;">
-      <table><thead><tr><th>ID</th><th>Fecha</th><th>Estación</th><th>Status</th><th>Comprobante</th><th>Factura</th></tr></thead><tbody id="payT"></tbody></table>
+    <div style="font-weight:900;font-size:14.5px;">Historial de pagos</div>
+    <div class="tablewrap" style="margin-top:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Estación</th>
+            <th>Periodo</th>
+            <th>Estado</th>
+            <th>Comprobante</th>
+            <th>Factura</th>
+            <th data-admin-contador-only hidden>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="payT">
+          <tr><td colspan="8" class="pay-empty">Cargando historial…</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
+
 </div>
+
+{# ── Modal: adjuntar factura para validar ──────────────────────── #}
+<dialog id="dlgInvoice">
+  <div class="dlg-header">
+    <h3>Validar comprobante</h3>
+  </div>
+  <form method="dialog" id="invoiceForm">
+    <div class="dlg-body">
+      <input type="hidden" id="invoicePaymentId" name="payment_id">
+      <div>
+        <div style="font-size:13px;color:var(--hme-text-soft,#64748b);">Estación:</div>
+        <div id="invoiceStationName" style="font-weight:700;margin-top:2px;"></div>
+      </div>
+      <div>
+        <div class="help">Factura (PDF obligatorio)</div>
+        <input class="input" type="file" id="invoiceFile" name="invoice" accept=".pdf" required>
+        <div class="upload-hint">Se requiere la factura en PDF para confirmar la validación.</div>
+      </div>
+      <div id="invoiceErr" class="help" style="color:var(--hme-danger);font-weight:900;" hidden></div>
+    </div>
+    <div class="dlg-footer">
+      <button class="btn ghost" type="button" id="invoiceCancel">Cancelar</button>
+      <button class="btn primary" type="submit" id="invoiceConfirm" disabled>Confirmar validación</button>
+    </div>
+  </form>
+</dialog>
 
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/payments.js"></script>
 {% endblock %}
+

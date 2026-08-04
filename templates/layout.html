@@ -77,9 +77,9 @@
               <a href="/mod/operational-calendar" data-supervisor-only hidden>{{ "Agenda (calendario)" if session.get('brand','consulting') == 'petroleum' else "Calendario operativo" }}</a>
               <a href="/mod/station-evidence" data-jefe-only hidden>Evidencias por estación</a>
               {% if session.get('brand','consulting') == 'petroleum' %}<a href="/mod/document-renewals-calendar">Vencimientos y renovaciones</a>{% endif %}
-              <a href="/mod/evidencias">Evidencias</a>
-              <a href="/mod/incidents" data-not-admin hidden>Incidencias <span id="incidentsBadge" class="badge" style="display:none;margin-left:6px;background:#dc2626;color:white;">0</span></a>
-              <a href="/mod/corrections">Tareas / Correcciones</a>
+              <a href="/mod/evidencias" data-operacional-only hidden>Evidencias</a>
+              <a href="/mod/incidents" data-not-admin data-operacional-only hidden>Incidencias <span id="incidentsBadge" class="badge" style="display:none;margin-left:6px;background:#dc2626;color:white;">0</span></a>
+              <a href="/mod/corrections" data-operacional-only hidden>Tareas / Correcciones</a>
             </nav>
           </details>
           <details {% if active_section in ('operacion_tecnica', 'normativa_control') %}open{% endif %}>
@@ -88,12 +88,12 @@
               {% if session.get('brand','consulting') == 'petroleum' %}
               <a href="/petroleum/normativas">Normativas</a>
               <a href="/petroleum/expedientes">Expediente normativo (carpeta)</a>
-              <a href="/mod/reports" data-not-operador hidden>Reportes</a>
+              <a href="/mod/reports" data-supervisor-only hidden>Reportes</a>
               {% else %}
-              <a href="/mod/pipas">Pipas</a>
-              <a href="/mod/maintenance">Mantenimiento</a>
-              <a href="/mod/alerts">Alertas</a>
-              <a href="/mod/reports" data-not-operador hidden>Reportes</a>
+              <a href="/mod/pipas" data-operacional-only hidden>Pipas</a>
+              <a href="/mod/maintenance" data-operacional-only hidden>Mantenimiento</a>
+              <a href="/mod/alerts" data-operacional-only hidden>Alertas</a>
+              <a href="/mod/reports" data-supervisor-only hidden>Reportes</a>
               {% endif %}
               <a href="/mod/payments" data-not-operador hidden>Mensualidad</a>
             </nav>

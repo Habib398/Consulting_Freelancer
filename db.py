@@ -2326,7 +2326,7 @@ def get_user(user_id: int) -> dict | None:
     with db_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT u.*, s.monthly_status, s.monthly_end FROM users u LEFT JOIN stations s ON s.id=u.station_id WHERE u.id=?",
+            "SELECT u.*, s.monthly_status, s.monthly_end, s.name AS station_name FROM users u LEFT JOIN stations s ON s.id=u.station_id WHERE u.id=?",
             (user_id,),
         )
         row = cur.fetchone()

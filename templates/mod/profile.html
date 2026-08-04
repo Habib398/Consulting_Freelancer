@@ -1,38 +1,160 @@
 {% extends "layout.html" %}
-{% block head %}{% endblock %}
+{% block head %}
+<style>
+  /* ── Avatar de iniciales ────────────────────────────────────────── */
+  .prof-avatar{
+    width:56px; height:56px; border-radius:14px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; font-weight:900; letter-spacing:-.5px;
+    color:#fff;
+  }
+  .prof-user-card{
+    display:flex; align-items:flex-start; gap:16px;
+  }
+  .prof-user-info{ flex:1; min-width:0; }
+  .prof-user-info .name{ font-size:17px; font-weight:900; }
+  .prof-user-info .meta{ font-size:12.5px; color:var(--hme-text-soft,#64748b); margin-top:3px; }
+  .role-badge{
+    display:inline-flex; align-items:center;
+    padding:3px 10px; border-radius:999px;
+    font-size:10.5px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+    margin-top:8px;
+  }
+
+  /* ── FIEL status ────────────────────────────────────────────────── */
+  .fiel-status{
+    display:flex; align-items:center; gap:10px;
+    padding:12px 14px; border-radius:10px;
+    border:1px solid var(--hme-border,rgba(15,23,42,.09));
+    margin-top:12px;
+  }
+  .fiel-dot{
+    width:10px; height:10px; border-radius:50%; flex-shrink:0;
+  }
+
+  /* ── Read-only field display ────────────────────────────────────── */
+  .ro-field{
+    display:grid; gap:2px;
+  }
+  .ro-label{ font-size:11.5px; color:var(--hme-text-soft,#64748b); font-weight:700; }
+  .ro-value{
+    font-size:13.5px; font-weight:600;
+    padding:8px 10px; border-radius:8px;
+    background:var(--hme-bg-soft,#f8fafc);
+    border:1px solid var(--hme-border,rgba(15,23,42,.09));
+    color:var(--hme-text,#0f172a);
+    min-height:36px;
+  }
+  .ro-value.empty{ color:var(--hme-text-soft,#94a3b8); font-style:italic; font-weight:400; }
+
+  .prof-section-title{
+    font-weight:900; font-size:14.5px; margin-bottom:14px;
+    padding-bottom:10px; border-bottom:1px solid var(--hme-border,rgba(15,23,42,.09));
+  }
+</style>
+{% endblock %}
 {% block content %}
 <div class="pagehead">
   <div>
-    <h1 class="h1">Perfil / FIEL</h1>
-    <div class="sub">Gestión de datos fiscales y certificados.</div>
+    <h1 class="h1">Perfil y FIEL</h1>
+    <div class="sub">Cuenta personal y datos fiscales de la estación.</div>
   </div>
 </div>
 
-<div class="grid cols-2">
+{# ── Sección: Mi cuenta ──────────────────────────────────────────── #}
+<div class="grid cols-2" style="margin-top:4px;">
+
   <div class="card">
-    <div style="font-weight:900;">Perfil fiscal de estación</div>
-    <div class="help">Permiso, razón social y FIEL (para descargas anuales).</div>
-    <form id="profileForm" style="display:grid;gap:10px;margin-top:10px;">
-      <div id="profileStationWrap" hidden><div class="help">Estación</div><select class="input" id="profileStation" name="station_id"></select></div>
-      <div><div class="help">Número de permiso</div><input class="input" name="permit_number"></div>
-      <div><div class="help">Razón social</div><input class="input" name="legal_name"></div>
-      <div class="formrow">
-        <div><div class="help">FIEL .cer</div><input class="input" type="file" name="fiel_cer"></div>
-        <div><div class="help">FIEL .key</div><input class="input" type="file" name="fiel_key"></div>
+    <div class="prof-section-title">Mi cuenta</div>
+    <div class="prof-user-card">
+      <div class="prof-avatar" id="profAvatar" style="background:#6366f1;">—</div>
+      <div class="prof-user-info">
+        <div class="name" id="profUsername">—</div>
+        <div class="meta" id="profEmail">—</div>
+        <div class="meta" id="profStation">—</div>
+        <span class="role-badge" id="profRoleBadge">—</span>
       </div>
-      <div class="formactions"><button class="btn primary" type="submit">Guardar</button></div>
-      <div id="profErr" class="help" style="color:var(--hme-danger);font-weight:900;" hidden></div>
-      <div id="profOk" class="help" style="color:var(--hme-success);font-weight:900;" hidden></div>
-    </form>
+    </div>
   </div>
 
   <div class="card">
-    <div style="font-weight:900;">Estado</div>
-    <div id="profState" class="help" style="margin-top:10px;">Cargando…</div>
+    <div class="prof-section-title">Estado FIEL</div>
+    <div id="fielStatus">
+      <div class="fiel-status">
+        <div class="fiel-dot" style="background:#94a3b8;"></div>
+        <div>
+          <div style="font-weight:700;font-size:13px;">Cargando…</div>
+          <div class="help" id="fielStatusText" style="margin-top:2px;"></div>
+        </div>
+      </div>
+      <div id="fielDownloads" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;"></div>
+    </div>
   </div>
+
+</div>
+
+{# ── Sección: Datos fiscales de la estación ─────────────────────── #}
+<div class="card" style="margin-top:12px;">
+  <div class="prof-section-title">Datos fiscales de la estación</div>
+  <div id="profileStationWrap" hidden style="margin-bottom:14px;">
+    <div class="help" style="margin-bottom:6px;">Estación</div>
+    <select class="input" id="profileStation" name="station_id"></select>
+  </div>
+
+  {# ── Vista de solo lectura (no-admin) ─────────────────────────── #}
+  <div id="profReadOnly" hidden>
+    <div class="help" style="margin-bottom:14px;padding:8px 12px;background:rgba(100,116,139,.06);border-radius:8px;border-left:3px solid #94a3b8;">
+      Solo lectura. Contacta al administrador para modificar los datos.
+    </div>
+    <div class="grid cols-2">
+      <div class="ro-field"><span class="ro-label">Número de permiso</span><span class="ro-value empty" id="ro-permit_number">—</span></div>
+      <div class="ro-field"><span class="ro-label">Razón social</span><span class="ro-value empty" id="ro-legal_name">—</span></div>
+      <div class="ro-field"><span class="ro-label">RFC</span><span class="ro-value empty" id="ro-rfc">—</span></div>
+      <div class="ro-field"><span class="ro-label">Domicilio fiscal</span><span class="ro-value empty" id="ro-domicilio">—</span></div>
+      <div class="ro-field"><span class="ro-label">Representante legal</span><span class="ro-value empty" id="ro-representante_legal">—</span></div>
+      <div class="ro-field"><span class="ro-label">Responsable operativo</span><span class="ro-value empty" id="ro-responsable_operativo">—</span></div>
+      <div class="ro-field"><span class="ro-label">Responsable SASISOPA</span><span class="ro-value empty" id="ro-responsable_sasisopa">—</span></div>
+      <div class="ro-field"><span class="ro-label">Responsable SGM</span><span class="ro-value empty" id="ro-responsable_sgm">—</span></div>
+      <div class="ro-field"><span class="ro-label">Correo de estación</span><span class="ro-value empty" id="ro-correo">—</span></div>
+      <div class="ro-field"><span class="ro-label">Teléfono</span><span class="ro-value empty" id="ro-telefono">—</span></div>
+    </div>
+  </div>
+
+  {# ── Formulario editable (admin) ──────────────────────────────── #}
+  <form id="profileForm" style="display:grid;gap:14px;">
+    <div class="grid cols-2">
+      <div><div class="help">Número de permiso</div><input class="input" name="permit_number" placeholder="Ej. G/01234/EXP/…"></div>
+      <div><div class="help">Razón social</div><input class="input" name="legal_name" placeholder="Nombre o razón social registrado ante el SAT"></div>
+      <div><div class="help">RFC</div><input class="input" name="rfc" placeholder="RFC con homoclave"></div>
+      <div><div class="help">Domicilio fiscal</div><input class="input" name="domicilio" placeholder="Calle, número, colonia, ciudad"></div>
+      <div><div class="help">Representante legal</div><input class="input" name="representante_legal" placeholder="Nombre completo"></div>
+      <div><div class="help">Responsable operativo</div><input class="input" name="responsable_operativo" placeholder="Nombre completo"></div>
+      <div><div class="help">Responsable SASISOPA</div><input class="input" name="responsable_sasisopa" placeholder="Nombre completo"></div>
+      <div><div class="help">Responsable SGM</div><input class="input" name="responsable_sgm" placeholder="Nombre completo"></div>
+      <div><div class="help">Correo de estación</div><input class="input" name="correo" type="email" placeholder="correo@estacion.com"></div>
+      <div><div class="help">Teléfono</div><input class="input" name="telefono" placeholder="10 dígitos"></div>
+    </div>
+
+    <div style="border-top:1px solid var(--hme-border,rgba(15,23,42,.09));padding-top:14px;">
+      <div style="font-weight:800;font-size:13px;margin-bottom:12px;">FIEL (Firma Electrónica Avanzada)</div>
+      <div class="formrow">
+        <div><div class="help">Certificado .cer</div><input class="input" type="file" name="fiel_cer" accept=".cer"></div>
+        <div><div class="help">Llave privada .key</div><input class="input" type="file" name="fiel_key" accept=".key"></div>
+      </div>
+      <div class="help" style="margin-top:6px;">Límite: 10 MB por archivo. Solo se requiere subir si deseas actualizar los archivos existentes.</div>
+    </div>
+
+    <div class="formactions">
+      <button class="btn primary" type="submit">Guardar cambios</button>
+    </div>
+    <div id="profErr" class="help" style="color:var(--hme-danger);font-weight:900;" hidden></div>
+    <div id="profOk"  class="help" style="color:var(--hme-success);font-weight:900;" hidden></div>
+  </form>
+
 </div>
 
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/profile.js"></script>
 {% endblock %}
+
