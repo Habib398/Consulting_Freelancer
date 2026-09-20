@@ -1,8 +1,7 @@
 from __future__ import annotations
 import json, datetime, os
 from flask import request, jsonify, session, redirect, render_template, send_from_directory, abort, current_app, Response
-from werkzeug.security import generate_password_hash
-from db import get_conn, verify_user, get_user
+from db import get_conn
 from services.brand import get_brand
 
 
@@ -32,8 +31,6 @@ def register(app):
     @login_required
     def report_monthly():
         me=ctx.get_me()
-        if me and me.get("role")=="operador":
-            return jsonify({"error":"forbidden"}),403
         if me and me.get("role")=="operador":
             return jsonify({"error":"forbidden"}),403
         if ctx.station_blocked(me) and me["role"]!="admin":
@@ -307,9 +304,9 @@ def register(app):
         c = canvas.Canvas(tmp.name, pagesize=letter)
         w,h = letter
 
-        brand_label = "Agenda" if get_brand()=="petroleum" else "Actividades"
-        singular_label = "Agenda" if get_brand()=="petroleum" else "Actividad"
-        filename_label = "agenda" if get_brand()=="petroleum" else "actividades"
+        brand_label = "Actividades"
+        singular_label = "Actividad"
+        filename_label = "actividades"
 
         c.setFont("Helvetica-Bold", 14)
         c.drawString(40, h-50, f"COG WORK LOG - {brand_label} del mes")
@@ -356,7 +353,7 @@ def register(app):
                 y = h-60
             date = it.get("start_date","")
             rk = it.get("repeat_kind") or "once"
-            title = it.get("title") or ("Agenda" if get_brand()=="petroleum" else "Actividad")
+            title = it.get("title") or "Actividad"
             desc_lines = wrap(it.get("description") or "", 55)
             title_lines = wrap(title, 28)
 
@@ -422,11 +419,11 @@ def register(app):
             "METHOD:PUBLISH",
         ]
         dtstamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-        filename_label = "agenda" if get_brand()=="petroleum" else "actividades"
+        filename_label = "actividades"
         for it in items:
             d = (it.get("start_date") or "").replace("-", "")
             uid = f"cog-activity-{it.get('id')}@local"
-            title = esc(it.get("title") or ("Agenda" if get_brand()=="petroleum" else "Actividad"))
+            title = esc(it.get("title") or "Actividad")
             rk = esc(it.get("repeat_kind") or "once")
             lines += [
                 "BEGIN:VEVENT",
@@ -545,35 +542,94 @@ def register(app):
 
 
 
+    def _consolidated_station_rows(brand: str) -> list[dict]:
+        """Obtiene conteos consolidados por estación en 5 queries (una por tabla),
+        evitando el patrón N+1 de hacer queries individuales por estación.
+        Retorna lista de dicts con: id, code, name, alerts_open, maint_total,
+        payments_pending, sasisopa_records, sgm_records.
+        """
+        with __import__("db").db_conn() as conn:
+            cur = conn.cursor()
+
+            # Base: todas las estaciones de la marca
+            cur.execute(
+                "SELECT id, code, name FROM stations WHERE brand=? ORDER BY code ASC, id ASC",
+                (brand,),
+            )
+            stations = [dict(r) for r in cur.fetchall()]
+            if not stations:
+                return []
+
+            # Alertas abiertas por estación
+            cur.execute(
+                "SELECT station_id, COUNT(*) AS c FROM alerts"
+                " WHERE brand=? AND status='open' GROUP BY station_id",
+                (brand,),
+            )
+            alerts_map = {int(r["station_id"]): int(r["c"]) for r in cur.fetchall()}
+
+            # Mantenimientos por estación
+            cur.execute(
+                "SELECT station_id, COUNT(*) AS c FROM maintenance"
+                " WHERE brand=? GROUP BY station_id",
+                (brand,),
+            )
+            maint_map = {int(r["station_id"]): int(r["c"]) for r in cur.fetchall()}
+
+            # Pagos pendientes por estación
+            cur.execute(
+                "SELECT station_id, COUNT(*) AS c FROM payments"
+                " WHERE brand=? AND status='pending' GROUP BY station_id",
+                (brand,),
+            )
+            payments_map = {int(r["station_id"]): int(r["c"]) for r in cur.fetchall()}
+
+            # Registros SASISOPA y SGM — ambos en una sola query
+            cur.execute(
+                "SELECT station_id, module, COUNT(*) AS c FROM doc_records"
+                " WHERE brand=? AND module IN ('sasisopa','sgm') GROUP BY station_id, module",
+                (brand,),
+            )
+            sas_map: dict = {}
+            sgm_map: dict = {}
+            for r in cur.fetchall():
+                sid = int(r["station_id"])
+                if r["module"] == "sasisopa":
+                    sas_map[sid] = int(r["c"])
+                else:
+                    sgm_map[sid] = int(r["c"])
+
+        rows = []
+        for st in stations:
+            sid = int(st["id"])
+            rows.append({
+                "id": sid,
+                "code": st["code"],
+                "name": st["name"],
+                "alerts_open": alerts_map.get(sid, 0),
+                "maint_total": maint_map.get(sid, 0),
+                "payments_pending": payments_map.get(sid, 0),
+                "sasisopa_records": sas_map.get(sid, 0),
+                "sgm_records": sgm_map.get(sid, 0),
+            })
+        return rows
+
     @app.get("/api/reports/consolidated.csv")
     @login_required
     @role_required("admin")
     def report_consolidated_csv():
         import io, csv
         brand = get_brand()
-        conn=get_conn(); cur=conn.cursor()
-        cur.execute("SELECT id, code, name FROM stations WHERE brand=? ORDER BY code ASC, id ASC", (brand,))
-        stations=[dict(r) for r in cur.fetchall()]
-        rows=[]
-        for st in stations:
-            sid=int(st['id'])
-            cur.execute("SELECT COUNT(*) AS c FROM alerts WHERE brand=? AND station_id=? AND status='open'", (brand, sid))
-            alerts_open=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM maintenance WHERE brand=? AND station_id=?", (brand, sid))
-            maint_total=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM payments WHERE brand=? AND station_id=? AND status='pending'", (brand, sid))
-            payments_pending=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_records WHERE brand=? AND station_id=? AND module='sasisopa'", (brand, sid))
-            sasisopa_records=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_records WHERE brand=? AND station_id=? AND module='sgm'", (brand, sid))
-            sgm_records=int(cur.fetchone()['c'] or 0)
-            rows.append([st['code'], st['name'], alerts_open, maint_total, payments_pending, sasisopa_records, sgm_records])
-        conn.close()
-        out=io.StringIO(); w=csv.writer(out)
-        w.writerow(["station_code","station_name","alerts_open","maintenance_total","payments_pending","sasisopa_records","sgm_records"])
-        w.writerows(rows)
+        rows = _consolidated_station_rows(brand)
+        out = io.StringIO(); w = csv.writer(out)
+        w.writerow(["station_code", "station_name", "alerts_open", "maintenance_total",
+                    "payments_pending", "sasisopa_records", "sgm_records"])
+        for r in rows:
+            w.writerow([r["code"], r["name"], r["alerts_open"], r["maint_total"],
+                        r["payments_pending"], r["sasisopa_records"], r["sgm_records"]])
         ctx.log_action(ctx.get_me(), "download_report_consolidated_csv", "reports", brand, {"stations": len(rows)})
-        return Response(out.getvalue().encode('utf-8'), mimetype='text/csv; charset=utf-8', headers={"Content-Disposition": f"attachment; filename=reporte_consolidado_{brand}.csv"})
+        return Response(out.getvalue().encode("utf-8"), mimetype="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f"attachment; filename=reporte_consolidado_{brand}.csv"})
 
     @app.get("/api/reports/consolidated.xlsx")
     @login_required
@@ -582,29 +638,21 @@ def register(app):
         from io import BytesIO
         from openpyxl import Workbook
         brand = get_brand()
-        conn=get_conn(); cur=conn.cursor()
-        cur.execute("SELECT id, code, name FROM stations WHERE brand=? ORDER BY code ASC, id ASC", (brand,))
-        stations=[dict(r) for r in cur.fetchall()]
-        wb=Workbook(); ws=wb.active; ws.title='Consolidado'
-        ws.append(['Reporte consolidado', brand])
+        rows = _consolidated_station_rows(brand)
+        wb = Workbook(); ws = wb.active; ws.title = "Consolidado"
+        ws.append(["Reporte consolidado", brand])
         ws.append([])
-        ws.append(['Código','Estación','Alertas abiertas','Mantenimientos','Pagos pendientes','Registros SASISOPA','Registros SGM'])
-        for st in stations:
-            sid=int(st['id'])
-            cur.execute("SELECT COUNT(*) AS c FROM alerts WHERE brand=? AND station_id=? AND status='open'", (brand, sid)); a=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM maintenance WHERE brand=? AND station_id=?", (brand, sid)); m=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM payments WHERE brand=? AND station_id=? AND status='pending'", (brand, sid)); pnd=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_records WHERE brand=? AND station_id=? AND module='sasisopa'", (brand, sid)); sas=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_records WHERE brand=? AND station_id=? AND module='sgm'", (brand, sid)); sgm=int(cur.fetchone()['c'] or 0)
-            ws.append([st['code'], st['name'], a, m, pnd, sas, sgm])
-        conn.close()
+        ws.append(["Código", "Estación", "Alertas abiertas", "Mantenimientos",
+                   "Pagos pendientes", "Registros SASISOPA", "Registros SGM"])
+        for r in rows:
+            ws.append([r["code"], r["name"], r["alerts_open"], r["maint_total"],
+                       r["payments_pending"], r["sasisopa_records"], r["sgm_records"]])
         buf = BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        ctx.log_action(ctx.get_me(), "download_report_consolidated_xlsx", "reports", brand, {"stations": len(stations)})
+        wb.save(buf); buf.seek(0)
+        ctx.log_action(ctx.get_me(), "download_report_consolidated_xlsx", "reports", brand, {"stations": len(rows)})
         return Response(
             buf.getvalue(),
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers={"Content-Disposition": f"attachment; filename=reporte_consolidado_{brand}.xlsx"},
         )
 
@@ -615,40 +663,40 @@ def register(app):
         from io import BytesIO
         from reportlab.lib.pagesizes import letter
         from reportlab.pdfgen import canvas
-        brand=get_brand()
-        conn=get_conn(); cur=conn.cursor()
-        cur.execute("SELECT id, code, name FROM stations WHERE brand=? ORDER BY code ASC, id ASC", (brand,))
-        stations=[dict(r) for r in cur.fetchall()]
+        brand = get_brand()
+        rows = _consolidated_station_rows(brand)
         buf = BytesIO()
-        c=canvas.Canvas(buf, pagesize=letter); w,h=letter
-        c.setFont('Helvetica-Bold', 14); c.drawString(40, h-50, 'COG WORK LOG - Reporte consolidado por estación')
-        c.setFont('Helvetica', 10); c.drawString(40, h-66, f'Marca: {brand}')
-        y=h-92
-        c.setFont('Helvetica-Bold', 8)
-        headers=[('Código',40),('Estación',90),('Alertas',260),('Mant.',315),('Pagos',360),('SAS',410),('SGM',450)]
-        for label,x in headers: c.drawString(x,y,label)
-        y-=10; c.line(40,y,w-40,y); y-=12; c.setFont('Helvetica',8)
-        for st in stations:
-            if y<60:
-                c.showPage(); y=h-60; c.setFont('Helvetica',8)
-            sid=int(st['id'])
-            cur.execute("SELECT COUNT(*) AS c FROM alerts WHERE brand=? AND station_id=? AND status='open'", (brand, sid)); a=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM maintenance WHERE brand=? AND station_id=?", (brand, sid)); m=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM payments WHERE brand=? AND station_id=? AND status='pending'", (brand, sid)); pnd=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_records WHERE brand=? AND station_id=? AND module='sasisopa'", (brand, sid)); sas=int(cur.fetchone()['c'] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_records WHERE brand=? AND station_id=? AND module='sgm'", (brand, sid)); sgm=int(cur.fetchone()['c'] or 0)
-            c.drawString(40,y,str(st['code'] or ''))
-            c.drawString(90,y,(st['name'] or '')[:28])
-            c.drawRightString(290,y,str(a)); c.drawRightString(340,y,str(m)); c.drawRightString(390,y,str(pnd)); c.drawRightString(430,y,str(sas)); c.drawRightString(470,y,str(sgm))
-            y-=11
-        conn.close(); c.showPage(); c.save()
+        c = canvas.Canvas(buf, pagesize=letter); w, h = letter
+        c.setFont("Helvetica-Bold", 14); c.drawString(40, h - 50, "COG WORK LOG - Reporte consolidado por estación")
+        c.setFont("Helvetica", 10); c.drawString(40, h - 66, f"Marca: {brand}")
+        y = h - 92
+        c.setFont("Helvetica-Bold", 8)
+        headers = [("Código", 40), ("Estación", 90), ("Alertas", 260),
+                   ("Mant.", 315), ("Pagos", 360), ("SAS", 410), ("SGM", 450)]
+        for label, x in headers:
+            c.drawString(x, y, label)
+        y -= 10; c.line(40, y, w - 40, y); y -= 12; c.setFont("Helvetica", 8)
+        for r in rows:
+            if y < 60:
+                c.showPage(); y = h - 60; c.setFont("Helvetica", 8)
+            c.drawString(40, y, str(r["code"] or ""))
+            c.drawString(90, y, (r["name"] or "")[:28])
+            c.drawRightString(290, y, str(r["alerts_open"]))
+            c.drawRightString(340, y, str(r["maint_total"]))
+            c.drawRightString(390, y, str(r["payments_pending"]))
+            c.drawRightString(430, y, str(r["sasisopa_records"]))
+            c.drawRightString(470, y, str(r["sgm_records"]))
+            y -= 11
+        c.showPage(); c.save()
         payload = buf.getvalue()
-        ctx.log_action(ctx.get_me(), "download_report_consolidated_pdf", "reports", brand, {"stations": len(stations)})
+        ctx.log_action(ctx.get_me(), "download_report_consolidated_pdf", "reports", brand, {"stations": len(rows)})
         return Response(
             payload,
-            mimetype='application/pdf',
+            mimetype="application/pdf",
             headers={"Content-Disposition": f"attachment; filename=reporte_consolidado_{brand}.pdf"},
         )
+
+
 
     # ---------------- Activity compliance analytics (Reportes web) ----------------
     @app.get("/api/reports/activity-compliance")

@@ -875,37 +875,23 @@ def register(app):
     @role_required("admin","auditor","contador","jefe_estacion","operador")
     def select_system():
         """
-        Selector de empresa (Consulting / Petroleum) DESPUÉS del login.
-        - Admin: siempre ve ambas opciones.
-        - Otros roles: si solo tienen una empresa asignada, se auto-selecciona.
+        Selector de empresa — ahora es consulting-only.
+        Auto-selecciona consulting y redirige segun rol.
         """
-        from services.brand import parse_allowed_brands, set_brand
+        from services.brand import set_brand
 
         me = ctx.get_me() or {}
         role = (me.get("role") or "").strip().lower()
 
+        set_brand("consulting")
+
         if role == "admin":
-            allowed = {"consulting", "petroleum"}
-        else:
-            allowed = parse_allowed_brands(me.get("allowed_brands"))
-
-        if len(allowed) == 1:
-            chosen = next(iter(allowed))
-            set_brand(chosen)
-            # Post-login landing según rol:
-            # - Admin           → hub de administración
-            # - operador        → vista de actividades directamente
-            # - jefe_estacion   → calendario operativo directamente
-            # - contador/auditor y demás → menú staff general
-            if role == "admin":
-                return redirect("/admin/menu")
-            if role == "operador":
-                return redirect("/mod/activities")
-            if role == "jefe_estacion":
-                return redirect("/mod/operational-calendar")
-            return redirect("/staff/menu")
-
-        return render_template("select_system.html", allowed=sorted(list(allowed)))
+            return redirect("/admin/menu")
+        if role == "operador":
+            return redirect("/mod/activities")
+        if role == "jefe_estacion":
+            return redirect("/mod/station-evidence")
+        return redirect("/staff/menu")
 
 
 
@@ -939,7 +925,7 @@ def register(app):
         if role == "operador":
             redirect_url = "/mod/activities"
         elif role == "jefe_estacion":
-            redirect_url = "/mod/operational-calendar"
+            redirect_url = "/mod/station-evidence"
         else:
             redirect_url = "/staff/menu"
         return jsonify({"ok": True, "brand": brand, "redirect": redirect_url})

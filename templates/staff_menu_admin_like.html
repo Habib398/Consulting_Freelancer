@@ -3,36 +3,28 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>{{ 'Centro Petroleum' if brand=='petroleum' else 'Centro Consulting' }} • Operación</title>
+  <title>Centro Consulting • Operación</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/theme-hme.css"/>
   <style>
     :root{
-      --acc:{% if brand=='petroleum' %}#D6AF45{% else %}#22c55e{% endif %};
-      --acc-soft:{% if brand=='petroleum' %}rgba(214,175,69,.14){% else %}rgba(34,197,94,.10){% endif %};
-      --acc-line:{% if brand=='petroleum' %}rgba(214,175,69,.30){% else %}rgba(34,197,94,.22){% endif %};
-      --acc-text:{% if brand=='petroleum' %}#f5deb3{% else %}#166534{% endif %};
-      --acc-contrast:{% if brand=='petroleum' %}#1F2937{% else %}#ffffff{% endif %};
-      --surface:{% if brand=='petroleum' %}rgba(255,255,255,.055){% else %}#ffffff{% endif %};
-      --surface-2:{% if brand=='petroleum' %}rgba(255,255,255,.035){% else %}rgba(15,23,42,.025){% endif %};
-      --text:{% if brand=='petroleum' %}#F8FAFC{% else %}#0f172a{% endif %};
-      --soft:{% if brand=='petroleum' %}rgba(226,232,240,.70){% else %}#64748b{% endif %};
-      --border:{% if brand=='petroleum' %}rgba(255,255,255,.12){% else %}rgba(15,23,42,.09){% endif %};
-      --shadow:{% if brand=='petroleum' %}0 18px 50px rgba(0,0,0,.40){% else %}0 14px 40px rgba(2,6,23,.07){% endif %};
-      --bg:{% if brand=='petroleum' %}
-        radial-gradient(900px 520px at 14% 0%, rgba(214,175,69,.16), transparent 56%),
-        radial-gradient(820px 480px at 92% 8%, rgba(18,63,126,.28), transparent 58%),
-        linear-gradient(180deg,#040914 0%,#07111f 55%,#050b14 100%)
-      {% else %}
+      --acc:#22c55e;
+      --acc-soft:rgba(34,197,94,.10);
+      --acc-line:rgba(34,197,94,.22);
+      --acc-text:#166534;
+      --acc-contrast:#ffffff;
+      --surface:#ffffff;
+      --surface-2:rgba(15,23,42,.025);
+      --text:#0f172a;
+      --soft:#64748b;
+      --border:rgba(15,23,42,.09);
+      --shadow:0 14px 40px rgba(2,6,23,.07);
+      --bg:
         radial-gradient(900px 520px at 14% 0%, rgba(34,197,94,.10), transparent 55%),
         radial-gradient(820px 480px at 92% 8%, rgba(234,179,8,.08), transparent 60%),
-        linear-gradient(180deg,#ffffff 0%,#f8fafc 55%,#ffffff 100%)
-      {% endif %};
-      --hero-bg:{% if brand=='petroleum' %}
-        linear-gradient(135deg, rgba(214,175,69,.16), rgba(255,255,255,.02) 60%)
-      {% else %}
-        linear-gradient(135deg, rgba(34,197,94,.10), rgba(255,255,255,.6) 60%)
-      {% endif %};
+        linear-gradient(180deg,#ffffff 0%,#f8fafc 55%,#ffffff 100%);
+      --hero-bg:
+        linear-gradient(135deg, rgba(34,197,94,.10), rgba(255,255,255,.6) 60%);
     }
     *{box-sizing:border-box}
     body{
@@ -49,7 +41,7 @@
       display:flex; justify-content:space-between; align-items:center;
       gap:14px; flex-wrap:wrap;
       padding:14px 22px;
-      background:{% if brand=='petroleum' %}rgba(4,9,20,.62){% else %}rgba(255,255,255,.78){% endif %};
+      background:rgba(255,255,255,.78);
       backdrop-filter:blur(12px);
       border-bottom:1px solid var(--border);
     }
@@ -83,7 +75,7 @@
     .btn.ghost{ background:transparent; }
     .btn.primary{
       background:var(--acc); color:var(--acc-contrast); border-color:transparent;
-      box-shadow:0 10px 24px {% if brand=='petroleum' %}rgba(214,175,69,.25){% else %}rgba(34,197,94,.25){% endif %};
+      box-shadow:0 10px 24px rgba(34,197,94,.25);
     }
     .btn.primary:hover{ filter:brightness(1.05); }
     .btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
@@ -246,16 +238,15 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <div class="logo"><img src="{{ '/static/img/petroleum-logo.png' if brand=='petroleum' else '/static/img/logo.png' }}" alt="logo"></div>
+      <div class="logo"><img src="/static/img/logo.png" alt="logo"></div>
       <div>
-        <div class="eyebrow">{{ 'Petroleum' if brand=='petroleum' else 'Consulting' }} • {{ me.role|replace('_',' ')|title }}</div>
+        <div class="eyebrow">Consulting • {{ me.role|replace('_',' ')|title }}</div>
         <div class="title">Centro operativo</div>
         <div class="subtitle">Accesos limitados a tu rol</div>
       </div>
     </div>
     <div class="top-actions">
-      <div class="pill">{{ 'PETROLEUM' if brand=='petroleum' else 'CONSULTING' }}</div>
-      <a class="btn ghost" href="/select-system">Cambiar sistema</a>
+      <div class="pill">CONSULTING</div>
       <a class="btn ghost" href="/logout">
         <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
         Cerrar sesión
@@ -294,7 +285,7 @@
         </span>
         <span class="meta-chip">
           <svg viewBox="0 0 24 24"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
-          <span class="k">Sistema:</span> {{ 'Petroleum' if brand=='petroleum' else 'Consulting' }}
+          <span class="k">Sistema:</span> Consulting
         </span>
         {% if me.role == 'contador' %}
         <span class="meta-chip" id="chipPending" style="display:none;">

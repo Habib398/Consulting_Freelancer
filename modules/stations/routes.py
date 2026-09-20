@@ -130,7 +130,7 @@ def api_station_create():
     conn = get_conn()
     cur = conn.cursor()
     brand = (data.get("brand") or get_brand()).strip().lower()
-    if brand not in ("consulting", "petroleum"):
+    if brand != "consulting":
         brand = get_brand()
     cur.execute(
         "INSERT INTO stations (brand, name, code, station_number, group_name, state, city, address, lat, lng, monthly_status, monthly_end) "
@@ -163,7 +163,7 @@ def api_station_update(station_id):
               "address", "lat", "lng", "monthly_status", "monthly_end"]
     if "brand" in data:
         b = (data.get("brand") or "").strip().lower()
-        if b not in ("consulting", "petroleum"):
+        if b != "consulting":
             data.pop("brand", None)
         else:
             data["brand"] = b
@@ -295,7 +295,7 @@ def api_stations_import_kml():
                     return None
 
         def _next_code(cur):
-            prefix = "C-KML" if brand == "consulting" else "P-KML"
+            prefix = "C-KML"
             cur.execute(
                 "SELECT code FROM stations WHERE code LIKE ? ORDER BY code DESC LIMIT 1",
                 (prefix + "-%",)

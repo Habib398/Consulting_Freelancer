@@ -68,10 +68,10 @@ def register(app):
             allowed_brands = brand
         # normalize allowed_brands
         allowed = [p.strip() for p in allowed_brands.split(",") if p.strip()]
-        allowed = [p for p in allowed if p in ("consulting","petroleum")]
+        allowed = [p for p in allowed if p == "consulting"]
         if not allowed:
-            allowed = [brand]
-        allowed_brands = ",".join(sorted(set(allowed)))
+            allowed = ["consulting"]
+        allowed_brands = "consulting"
 
         if role in {"operador","jefe_estacion"} and not station_id:
             return jsonify({"error":"station_required"}), 400

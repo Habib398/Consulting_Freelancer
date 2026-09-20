@@ -110,81 +110,33 @@ def register(app):
     login_required = ctx.login_required
     role_required = ctx.role_required
 
-    # ---------------- classroom permissions helpers ----------------
+    # ---------------- helpers de permisos ----------------
     def _jefe_can_manage(me, creator_role, station_id) -> bool:
-        """Quién puede editar/borrar una actividad o evento.
-
-        - admin: todo.
-        - jefe_estacion: solo lo que NO creó un admin y que cae en su estación
-          (los eventos globales -station_id NULL- son territorio del admin).
-        - otros roles: nada.
+        """Solo el admin puede gestionar actividades y eventos de calendario.
+        Helper conservado por compatibilidad; devuelve True únicamente para admin.
         """
-        role = me.get("role")
-        if role == "admin":
-            return True
-        if role != "jefe_estacion":
-            return False
-        if (creator_role or "") == "admin":
-            return False
-        if station_id is None:
-            return False
-        try:
-            return ctx.can_access_station(me, int(station_id))
-        except Exception:
-            return False
+        return me.get("role") == "admin"
 
     def _resolve_create_station(me, requested):
-        """Resuelve el station_id al crear.
-
-        - admin: libre (None = todas, o cualquier id).
-        - jefe_estacion: forzado a su estación; nunca 'todas' (None).
+        """Resuelve el station_id al crear (solo admin llega aquí).
+        Admin es libre de elegir cualquier estación o None (todas).
         """
-        if me.get("role") == "admin":
-            return requested
-        sid_me = me.get("station_id")
-        try:
-            if requested is not None and ctx.can_access_station(me, int(requested)):
-                return int(requested)
-        except Exception:
-            pass
-        return int(sid_me) if sid_me else None
+        return requested
 
-    # ---------------- activity templates ----------------
     @activities_bp.get("/api/activities")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_activities():
         me = ctx.get_me()
         conn = get_conn()
         cur = conn.cursor()
         brand = get_brand()
-        if me["role"] == "admin":
-            cur.execute(
-                "SELECT a.*, u.role AS creator_role FROM activities a "
-                "LEFT JOIN users u ON u.id=a.created_by "
-                "WHERE a.brand=? ORDER BY a.id DESC",
-                (brand,),
-            )
-        else:
-            # jefe: ve las de su estación + las globales, pero solo puede gestionar
-            # las propias (creator_role != 'admin'); el frontend usa can_edit.
-            scope = sorted(list(ctx.station_scope_ids(me)))
-            if scope:
-                q = ",".join(["?"] * len(scope))
-                cur.execute(
-                    "SELECT a.*, u.role AS creator_role FROM activities a "
-                    "LEFT JOIN users u ON u.id=a.created_by "
-                    f"WHERE a.brand=? AND (a.target_station_id IS NULL OR a.target_station_id IN ({q})) "
-                    "ORDER BY a.id DESC",
-                    tuple([brand] + scope),
-                )
-            else:
-                cur.execute(
-                    "SELECT a.*, u.role AS creator_role FROM activities a "
-                    "LEFT JOIN users u ON u.id=a.created_by "
-                    "WHERE a.brand=? AND a.target_station_id IS NULL ORDER BY a.id DESC",
-                    (brand,),
-                )
+        cur.execute(
+            "SELECT a.*, u.role AS creator_role FROM activities a "
+            "LEFT JOIN users u ON u.id=a.created_by "
+            "WHERE a.brand=? ORDER BY a.id DESC",
+            (brand,),
+        )
         activities = []
         for r in cur.fetchall():
             a = dict(r)
@@ -195,7 +147,7 @@ def register(app):
 
     @activities_bp.post("/api/activities")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_activity_create():
         me = ctx.get_me()
         payload = request.get_json(silent=True) or {}
@@ -229,7 +181,7 @@ def register(app):
 
     @activities_bp.put("/api/activities/<int:activity_id>")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_activity_update(activity_id: int):
         me = ctx.get_me()
         payload = request.get_json(silent=True) or {}
@@ -263,7 +215,7 @@ def register(app):
 
     @activities_bp.delete("/api/activities/<int:activity_id>")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_activity_delete(activity_id: int):
         """Soft delete: deactivate template to avoid breaking historical events."""
         me = ctx.get_me()
@@ -289,7 +241,7 @@ def register(app):
 
     @activities_bp.post("/api/activity-templates")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_activity_template_create():
         """Create an activity template + generate recurring calendar events (optionally by station)."""
         me = ctx.get_me()
@@ -719,7 +671,7 @@ def register(app):
 
     @activities_bp.post("/api/calendar/events")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_calendar_event_create():
         me = ctx.get_me()
         brand = get_brand()
@@ -756,7 +708,7 @@ def register(app):
 
     @activities_bp.put("/api/calendar/events/<int:event_id>")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_calendar_event_update(event_id: int):
         me = ctx.get_me()
         payload = request.get_json(silent=True) or {}
@@ -797,7 +749,7 @@ def register(app):
     
     @activities_bp.post("/api/calendar/events/<int:event_id>/move")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_calendar_event_move(event_id: int):
         """Move a calendar event (single) or shift the remaining events of the same template (series)."""
         me = ctx.get_me()
@@ -881,7 +833,7 @@ def register(app):
 
     @activities_bp.delete("/api/calendar/events/<int:event_id>")
     @login_required
-    @role_required("admin", "jefe_estacion")
+    @role_required("admin")
     def api_calendar_event_delete(event_id: int):
         me = ctx.get_me()
         conn = get_conn()
@@ -1052,142 +1004,6 @@ def register(app):
             pass
         return jsonify({"ok": True, "id": sub_id})
 
-    @activities_bp.post("/api/submissions/<int:submission_id>/set-status")
-    @login_required
-    @role_required("admin", "jefe_estacion")
-    def api_submission_set_status(submission_id: int):
-        """Update submission status and notify the operator."""
-        me = ctx.get_me()
-        brand = get_brand()
-        payload = request.get_json(silent=True) or {}
-        new_status = (payload.get("status") or "").strip().lower()
-        review_notes = (payload.get("review_notes") or "").strip()
-
-        if new_status not in {"approved", "rejected"}:
-            return jsonify({"error": "invalid_status"}), 400
-
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM submissions WHERE id=? AND brand=?", (submission_id, brand))
-        sub = cur.fetchone()
-        if not sub:
-            conn.close()
-            return jsonify({"error": "not_found"}), 404
-
-        # jefe_estacion scope enforcement
-        if me["role"] == "jefe_estacion":
-            sid_me = ctx.require_station(me)
-            if int(sub["station_id"] or 0) != int(sid_me):
-                conn.close()
-                return jsonify({"error": "forbidden_station"}), 403
-
-        cur.execute(
-            "UPDATE submissions SET status=?, review_notes=?, reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND brand=?",
-            (new_status, review_notes or None, me["id"], submission_id, brand),
-        )
-        conn.commit()
-        conn.close()
-
-        # Notify the operator who submitted
-        user_id = sub["user_id"]
-        station_id = sub["station_id"]
-        title = "Evidencia aprobada" if new_status == "approved" else "Evidencia rechazada"
-        body = review_notes or f"Evidencia #{submission_id}"
-        if user_id:
-            ctx.notify(int(user_id), int(station_id) if station_id else None, title, body, "/mod/evidencias", ntype="submission_review")
-
-        # If rejected, create a correction task
-        if new_status == "rejected":
-            try:
-                create_correction_task(
-                    ctx, me, brand=brand, title=f"Corregir evidencia #{submission_id}", description=review_notes or body,
-                    station_id=station_id, module="activities", related_entity="submission", related_entity_id=str(submission_id),
-                    assigned_to=user_id, source_status="rejected", priority="high", due_days=3,
-                )
-            except Exception:
-                pass
-
-        ctx.log_action(me, "set_submission_status", "submissions", str(submission_id), {"status": new_status})
-        return jsonify({"ok": True})
-
-    @activities_bp.post("/api/submissions/<int:submission_id>/review")
-    @login_required
-    @role_required("admin", "jefe_estacion")
-    def api_submission_review(submission_id: int):
-        """OBSOLETO en el modelo "classroom": completar = subir evidencia.
-
-        Se mantiene la ruta por compatibilidad pero ya no se expone en la UI;
-        no hay flujo de aprobación/rechazo de actividades.
-        """
-        return jsonify({"error": "review_disabled", "message": "El flujo de revisión fue retirado: las actividades se completan al subir evidencia."}), 410
-
-        me = ctx.get_me()
-        payload = request.get_json(silent=True) or {}
-        status = (payload.get("status") or "").strip().lower()
-        review_notes = (payload.get("review_notes") or "").strip()
-        score = payload.get("score")
-
-        if status not in {"reviewed", "approved", "rejected"}:
-            return jsonify({"error": "invalid_status"}), 400
-
-        if score is not None:
-            try:
-                score = int(score)
-            except Exception:
-                score = None
-
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM submissions WHERE id=? AND brand=?", (submission_id, get_brand()))
-        sub = cur.fetchone()
-        if not sub:
-            conn.close()
-            return jsonify({"error": "not_found"}), 404
-
-        # jefe_estacion scope enforcement
-        if me["role"] == "jefe_estacion":
-            sid_me = ctx.require_station(me)
-            if int(sub["station_id"] or 0) != int(sid_me):
-                conn.close()
-                return jsonify({"error": "forbidden_station"}), 403
-
-        cur.execute(
-            "UPDATE submissions SET status=?, review_notes=?, score=?, reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=? AND brand=?",
-            (status, review_notes or None, score, me["id"], submission_id, get_brand()),
-        )
-        conn.commit()
-
-        # Notify the original user (operator) with a clear workflow message
-        user_id = sub["user_id"]
-        station_id = sub["station_id"]
-        title = "Entrega aprobada" if status == "approved" else "Entrega rechazada" if status == "rejected" else "Entrega en revisión"
-        body = review_notes or f"Entrega #{submission_id}"
-        if user_id:
-            ctx.notify(int(user_id), int(station_id) if station_id else None, title, body, f"/mod/activities/event/{sub['event_id']}", ntype="submission")
-
-        # Rejected evidence must notify admins only.
-        if status == "rejected":
-            ctx.notify_admins(
-                "Evidencia rechazada",
-                f"Entrega #{submission_id}: {body}",
-                "/admin/inbox",
-                station_id=int(station_id),
-                exclude_user_id=me.get("id"),
-                ntype="submission",
-            )
-            try:
-                create_correction_task(
-                    ctx, me, brand=get_brand(), title=f"Corregir entrega #{submission_id}", description=body,
-                    station_id=station_id, module="activities", related_entity="submission", related_entity_id=str(submission_id),
-                    assigned_to=user_id, source_status="rejected", priority="high", due_days=3,
-                )
-            except Exception:
-                pass
-
-        ctx.log_action(me, "review_submission", "submissions", str(submission_id), {"status": status, "score": score})
-        ctx.sign_entity(me, "submission", str(submission_id), f"review_{status}", {"status": status, "score": score, "review_notes": review_notes})
-        conn.close()
-        return jsonify({"ok": True})
 
     # ---------------- progress (dashboard) ----------------
     @activities_bp.get("/api/my/activity-progress")

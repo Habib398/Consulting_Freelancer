@@ -28,10 +28,16 @@ def start_runtime_scheduler(app) -> None:
     stop_event = threading.Event()
 
     def _loop():
+        # Delay inicial: permite que el servidor WSGI arranque completamente
+        # antes de correr el primer tick (evita bloqueo en Waitress/produccion).
+        startup_delay = int(os.environ.get("COG_SCHEDULER_STARTUP_DELAY", "60"))
+        if stop_event.wait(startup_delay):
+            return  # detenido durante el delay de arranque
+
         while not stop_event.is_set():
             try:
                 with app.app_context():
-                    run_due_tick(app.extensions["ctx"], logger=app.logger, min_interval_minutes=1)
+                    run_due_tick(app.extensions["ctx"], logger=app.logger, min_interval_minutes=15)
             except Exception:
                 try:
                     app.logger.exception("Runtime scheduler tick failed")

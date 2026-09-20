@@ -55,9 +55,9 @@
 .ov {
   position: absolute; box-sizing: border-box; border-radius: 3px;
   overflow: hidden; font-size: 11px; line-height: 1.2;
-  display: flex; align-items: center; padding: 1px 3px;
+  display: flex; align-items: flex-start; padding: 1px 3px;
   transition: box-shadow .15s, border-color .15s, background .15s;
-  white-space: nowrap;
+  white-space: pre-wrap; word-break: break-word;
 }
 .ov.ov-edit {
   border: 1.5px solid rgba(37,99,235,.40);

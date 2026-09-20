@@ -7,7 +7,7 @@ from pathlib import Path
 from db import get_conn, DB_PATH
 from flask import has_request_context
 from services.backup import create_backup
-from services.brand import VALID_BRANDS, get_brand
+
 from services.deadlines import (
     list_document_deadlines,
     log_deadline_notification,
@@ -339,7 +339,7 @@ def run_due_tick(ctx, logger=None, min_interval_minutes: int = 15) -> None:
                     if logger:
                         logger.info("daily backup created")
                     try:
-                        _notify_admins_same_conn(conn, brand, "Respaldo automático completado", f"Respaldo diario creado: {backup_result.name if backup_result else 'desconocido'}", "/admin/backup", ntype="backup")
+                        _notify_admins_same_conn(conn, "consulting", "Respaldo automático completado", f"Respaldo diario creado: {backup_result.name if backup_result else 'desconocido'}", "/admin/backup", ntype="backup")
                     except Exception as e:
                         if logger:
                             logger.error(f"Failed to notify admins of backup: {e}")
@@ -350,7 +350,7 @@ def run_due_tick(ctx, logger=None, min_interval_minutes: int = 15) -> None:
         cur = conn.cursor()
         # In request-driven ticks, keep the current brand only. In background/runtime
         # ticks there is no request/session, so evaluate all brands safely.
-        brands_to_check = [get_brand()] if has_request_context() else list(VALID_BRANDS)
+        brands_to_check = ["consulting"]
         for brand in brands_to_check:
             # Station map (for nicer notification bodies).
             try:
@@ -376,30 +376,48 @@ def run_due_tick(ctx, logger=None, min_interval_minutes: int = 15) -> None:
             if not station_ids:
                 continue
 
-            # Evaluate each station
-            for sid in station_ids:
-                # All events applicable to this station
-                cur.execute(
-                    "SELECT id, start_date, title FROM calendar_events "
-                    "WHERE brand=? AND (station_id IS NULL OR station_id=?) AND start_date IS NOT NULL",
-                    (brand, sid),
-                )
-                events = [dict(r) for r in cur.fetchall()]
+            # Evaluate all stations — carga eventos y submissions en bulk para evitar N×M queries.
 
-                # For each event, find latest submission status
+            # 1. Todos los eventos activos de la marca (station_id NULL o específico)
+            cur.execute(
+                "SELECT id, start_date, title, station_id FROM calendar_events "
+                "WHERE brand=? AND start_date IS NOT NULL",
+                (brand,),
+            )
+            all_events = [dict(r) for r in cur.fetchall()]
+
+            # 2. Última submission por (station_id, event_id) — una sola query con GROUP BY
+            cur.execute(
+                "SELECT station_id, event_id, status "
+                "FROM submissions "
+                "WHERE brand=? AND id IN ("
+                "  SELECT MAX(id) FROM submissions WHERE brand=? GROUP BY station_id, event_id"
+                ")",
+                (brand, brand),
+            )
+            # Mapa: (station_id, event_id) -> status
+            latest_status: dict = {}
+            for r in cur.fetchall():
+                try:
+                    latest_status[(int(r["station_id"]), int(r["event_id"]))] = r["status"]
+                except Exception:
+                    pass
+
+            # 3. Evaluar por estación
+            for sid in station_ids:
+                # Filtrar eventos aplicables a esta estación (NULL = todos, o específico)
+                events = [
+                    ev for ev in all_events
+                    if ev.get("station_id") is None or int(ev["station_id"]) == sid
+                ]
+
                 for ev in events:
                     try:
                         ev_date = datetime.date.fromisoformat((ev.get("start_date") or "")[:10])
                     except Exception:
                         continue
 
-                    # Latest submission for this station + event
-                    cur.execute(
-                        "SELECT status FROM submissions WHERE brand=? AND station_id=? AND event_id=? ORDER BY id DESC LIMIT 1",
-                        (brand, sid, int(ev["id"])),
-                    )
-                    srow = cur.fetchone()
-                    latest = (srow["status"] if srow else None)
+                    latest = latest_status.get((sid, int(ev["id"])))
 
                     # Consider done only if approved
                     is_missing = (latest is None) or (latest == "rejected")
@@ -435,6 +453,8 @@ def run_due_tick(ctx, logger=None, min_interval_minutes: int = 15) -> None:
                     dkey_users = f"due:station_users:{brand}:{sid}:{int(ev['id'])}:{key_kind}"
                     if _dedup_key(conn, dkey_users):
                         _notify_station_users_same_conn(conn, brand, int(sid), title, body, "/mod/operational-calendar", ntype="due")
+
+
 
 
             # ---- Documental SASISOPA/SGM due reminders (admins only) ----

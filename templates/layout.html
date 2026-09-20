@@ -124,20 +124,14 @@
               <a href="/admin/inbox">Inbox (Revisión)</a>
               <a href="/admin/stations">Estaciones</a>
               <a href="/admin/users">Usuarios</a>
-              {% if session.get('brand','consulting') == 'petroleum' %}
-              <a href="/petroleum/normativas-control">Control de vigencias</a>
-              <a href="/petroleum/normativas">Normativas por estación</a>
-              <a href="/petroleum/expedientes">Expediente normativo (carpeta)</a>
-              {% else %}
-              {% endif %}
+
             </nav>
           </details>
           <details>
             <summary>Supervisión</summary>
             <nav class="nav">
               <a href="/admin/executive">Ejecutivo</a>
-{% if session.get('brand','consulting') == 'petroleum' %}              <a href="/admin/document-deadlines">Control maestro (admin)</a>
-{% endif %}              <a href="/admin/audit">Auditoría</a>
+              <a href="/admin/audit">Auditoría</a>
               <a href="/admin/incidents-report">Reporte de incidencias</a>
               <a href="/admin/docs/compare">Comparador documental</a>
               <a href="/admin/reports/print/consolidated" target="_blank" rel="noopener">Impresión pro</a>

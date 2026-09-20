@@ -35,7 +35,7 @@ def register(app):
             back_url=f"/admin/{module_key}/docs",
             back_label=f"Volver a {_MODULES[module_key]}",
             brand=brand,
-            brand_label="Petroleum" if brand == "petroleum" else "Consulting",
+            brand_label="Consulting",
         )
 
     @app.get("/admin/sasisopa/docx-templates")

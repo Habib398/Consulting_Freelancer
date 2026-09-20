@@ -10,7 +10,6 @@
   }
   .ev-badge.pending  { background: #fef9c3; color: #92400e; }
   .ev-badge.done     { background: #dcfce7; color: #15803d; }
-  .ev-badge.rejected { background: #fee2e2; color: #dc2626; }
 
   /* Evidence block (supervisor) */
   .ev-evidence-wrap { display: grid; gap: 14px; }
@@ -73,10 +72,7 @@
     <div id="evDesc" style="line-height:1.65;color:var(--hme-text);"></div>
     <div id="evDocs" style="margin-top:14px;display:grid;gap:8px;"></div>
     <hr class="ev-divider">
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
       <span id="evStatusBadge" class="ev-badge pending">Pendiente</span>
-      <span id="evReviewNotes" class="help" style="margin:0;"></span>
-    </div>
   </div>
 
   <!-- Tarjeta de evidencia / entrega (poblada por JS) -->
@@ -174,14 +170,9 @@
   const sub = ev.submission || null;
   const st  = sub?.status || null;
   const badge = document.getElementById("evStatusBadge");
-  const reviewEl = document.getElementById("evReviewNotes");
   if (st === "submitted" || st === "reviewed" || st === "approved") {
     badge.className = "ev-badge done";
     badge.textContent = "✓  Completada";
-  } else if (st === "rejected") {
-    badge.className = "ev-badge rejected";
-    badge.textContent = "✗  Rechazada";
-    if (sub?.review_notes) reviewEl.textContent = "Motivo: " + sub.review_notes;
   } else {
     badge.className = "ev-badge pending";
     badge.textContent = "Pendiente";

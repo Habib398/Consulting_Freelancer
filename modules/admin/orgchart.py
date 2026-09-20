@@ -92,73 +92,6 @@ DEFAULT_CONSULTING_NODES = [
 
 ]
 
-DEFAULT_PETROLEUM_NODES = [
-    {
-        'node_type': 'person', 'parent_slug': None, 'slug': 'alta-direccion', 'name': 'Alta Dirección',
-        'title': 'Dirección General', 'profession': '', 'email': '', 'phone': '',
-        'accent_color': '#d8a84f', 'sort_order': 5, 'photo_path': ''
-    },
-    {
-        'node_type': 'department', 'parent_slug': 'alta-direccion', 'slug': 'gerente-calidad', 'name': 'Gerente de Calidad',
-        'title': '', 'profession': '', 'email': '', 'phone': '',
-        'accent_color': '#7bb24b', 'sort_order': 10, 'photo_path': ''
-    },
-    {
-        'node_type': 'department', 'parent_slug': 'alta-direccion', 'slug': 'unidad-inspeccion', 'name': 'Unidad de Inspección',
-        'title': '', 'profession': '', 'email': '', 'phone': '',
-        'accent_color': '#7bb24b', 'sort_order': 20, 'photo_path': ''
-    },
-    {
-        'node_type': 'department', 'parent_slug': 'alta-direccion', 'slug': 'tercer-autorizado', 'name': 'Tercer Autorizado',
-        'title': '', 'profession': '', 'email': '', 'phone': '',
-        'accent_color': '#7bb24b', 'sort_order': 30, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'unidad-inspeccion', 'slug': 'daniel-bautista', 'name': 'Daniel Bautista Ramos',
-        'title': 'Gerente Técnico', 'profession': 'Ing. Civil', 'email': '', 'phone': '',
-        'accent_color': '#1d4c96', 'sort_order': 10, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'unidad-inspeccion', 'slug': 'marcial-diaz', 'name': 'Marcial Díaz Gutiérrez',
-        'title': 'Gerente Técnico Sustituto', 'profession': 'Ing. en Electrónica', 'email': '', 'phone': '',
-        'accent_color': '#1d4c96', 'sort_order': 20, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'tercer-autorizado', 'slug': 'experto-tecnico', 'name': 'Pendiente de asignar',
-        'title': 'Experto Técnico', 'profession': '', 'email': '', 'phone': '',
-        'accent_color': '#1d4c96', 'sort_order': 10, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'tercer-autorizado', 'slug': 'responsable-tecnico', 'name': 'Pendiente de asignar',
-        'title': 'Responsable Técnico', 'profession': '', 'email': '', 'phone': '',
-        'accent_color': '#1d4c96', 'sort_order': 20, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'unidad-inspeccion', 'slug': 'karla-adauto', 'name': 'Karla Adauto Rivera',
-        'title': 'Inspectora', 'profession': 'Ing. en Geología Ambiental', 'email': '', 'phone': '',
-        'accent_color': '#1d4c96', 'sort_order': 30, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'unidad-inspeccion', 'slug': 'jose-olegario', 'name': 'José Olegario Aguilera Cupido',
-        'title': 'Inspector', 'profession': 'Ing. Ambiental', 'email': '', 'phone': '',
-        'accent_color': '#1d4c96', 'sort_order': 40, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'unidad-inspeccion', 'slug': 'axel-salomon', 'name': 'Axel Salomón Gómez Reyes',
-        'title': 'Inspector', 'profession': 'Ing. en Geología Ambiental', 'email': '', 'phone': '',
-        'accent_color': '#1d4c96', 'sort_order': 50, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'unidad-inspeccion', 'slug': 'rosa-guadalupe', 'name': 'Rosa Guadalupe Calva Martínez',
-        'title': 'Auxiliar de Inspección', 'profession': 'Ing. en Geología Ambiental', 'email': '', 'phone': '',
-        'accent_color': '#d97c2f', 'sort_order': 60, 'photo_path': ''
-    },
-    {
-        'node_type': 'person', 'parent_slug': 'unidad-inspeccion', 'slug': 'brayan-mayorga', 'name': 'Brayan Isaac Mayorga Martínez',
-        'title': 'Apoyo Técnico', 'profession': 'Arquitecto en proceso', 'email': '', 'phone': '',
-        'accent_color': '#d97c2f', 'sort_order': 70, 'photo_path': ''
-    },
-]
 
 
 def register(app):
@@ -342,10 +275,7 @@ def register(app):
         return _seed_petroleum_chart_if_missing()
 
     def _chart_bundle(brand: str) -> tuple[dict[str, Any] | None, list[dict[str, Any]], dict[str, Any] | None, list[dict[str, Any]]]:
-        if brand == 'consulting':
-            chart = _seed_consulting_chart_if_missing()
-        else:
-            chart = _seed_petroleum_chart_if_missing()
+        chart = _seed_consulting_chart_if_missing()
         nodes = _fetch_nodes(int(chart['id'])) if chart and chart.get('id') else []
         director = next((n for n in nodes if n.get('parent_id') is None and n.get('node_type') == 'person' and int(n.get('is_visible') or 0) == 1), None)
         departments = []
@@ -620,23 +550,15 @@ def register(app):
         bdraw = ImageDraw.Draw(bg)
         top_rgb = (4, 11, 24)
         bottom_rgb = (10, 18, 36)
-        if brand == 'petroleum':
-            top_rgb = (7, 12, 26)
-            bottom_rgb = (16, 22, 36)
-        for y in range(height):
-            ratio = y / max(1, height - 1)
-            line = _mix(top_rgb, bottom_rgb, ratio)
-            bdraw.line((0, y, width, y), fill=line + (255,))
-        img.alpha_composite(bg)
-        _add_blur_glow(img, (-160, 80, 620, 780), ((36, 201, 142, 120) if brand == 'consulting' else (71, 150, 255, 90)), 80)
-        _add_blur_glow(img, (width - 700, 40, width + 120, 760), ((46, 157, 255, 90) if brand == 'consulting' else (224, 168, 69, 120)), 86)
+        _add_blur_glow(img, (-160, 80, 620, 780), (36, 201, 142, 120), 80)
+        _add_blur_glow(img, (width - 700, 40, width + 120, 760), (46, 157, 255, 90), 86)
         _add_blur_glow(img, (width // 2 - 260, 120, width // 2 + 260, 520), (255, 255, 255, 22), 70)
         draw = ImageDraw.Draw(img)
         for offset in range(4):
             alpha = 44 - offset * 8
             draw.arc((-120, 210 + offset * 20, width + 120, height + 180 + offset * 20), 192, 344, fill=(255, 255, 255, alpha), width=2)
 
-        logo_path = Path(app.root_path) / ('static/img/consulting-logo-full.png' if brand == 'consulting' else 'static/img/petroleum-logo-full.png')
+        logo_path = Path(app.root_path) / 'static/img/consulting-logo-full.png'
         if logo_path.exists() and Image is not None:
             try:
                 logo = Image.open(logo_path).convert('RGBA')
@@ -982,23 +904,19 @@ def register(app):
         persons.sort(key=lambda n: (int(n.get('sort_order') or 0), int(n.get('id') or 0)))
         return render_template(
             'admin/orgchart_manage.html',
-            brand=brand,
+            brand='consulting',
             chart=chart,
             nodes=nodes,
             departments=departments,
             persons=persons,
-            can_create=(brand == 'petroleum' and not chart),
+            can_create=False,
         )
 
     @app.post('/admin/organigrama/create-base')
     @page_login_required
     @page_role_required('admin')
     def admin_orgchart_create_base():
-        brand = get_brand()
-        if brand == 'consulting':
-            _seed_consulting_chart_if_missing()
-        else:
-            _create_petroleum_base_chart()
+        _seed_consulting_chart_if_missing()
         return redirect('/admin/organigrama?created=1')
 
     @app.post('/admin/organigrama/meta')
@@ -1008,10 +926,7 @@ def register(app):
         brand = get_brand()
         chart = _fetch_chart(brand)
         if not chart:
-            if brand == 'petroleum':
-                chart = _create_petroleum_base_chart()
-            else:
-                chart = _seed_consulting_chart_if_missing()
+            chart = _seed_consulting_chart_if_missing()
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
             "UPDATE org_charts SET title=?, subtitle=?, style_name=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
@@ -1032,7 +947,7 @@ def register(app):
         brand = get_brand()
         chart = _fetch_chart(brand)
         if not chart:
-            chart = _create_petroleum_base_chart() if brand == 'petroleum' else _seed_consulting_chart_if_missing()
+            chart = _seed_consulting_chart_if_missing()
         node_id = request.form.get('node_id')
         parent_id_raw = request.form.get('parent_id') or None
         parent_id = int(parent_id_raw) if parent_id_raw and parent_id_raw.isdigit() else None
@@ -1045,7 +960,7 @@ def register(app):
             'profession': (request.form.get('profession') or '').strip(),
             'email': (request.form.get('email') or '').strip(),
             'phone': (request.form.get('phone') or '').strip(),
-            'accent_color': (request.form.get('accent_color') or '').strip() or ('#1f6feb' if brand == 'consulting' else '#d69b3f'),
+            'accent_color': (request.form.get('accent_color') or '').strip() or '#1f6feb',
             'sort_order': int((request.form.get('sort_order') or '0').strip() or '0'),
             'is_visible': 1 if request.form.get('is_visible') in {'1', 'on', 'true', 'yes'} else 0,
         }
@@ -1131,14 +1046,8 @@ def register(app):
     @page_require_brand
     def view_orgchart():
         me = ctx.get_me() or {}
-        brand = get_brand()
-        if brand == 'consulting':
-            chart, nodes, director, departments = _chart_bundle('consulting')
-            return render_template('orgchart/view.html', brand=brand, chart=chart, nodes=nodes, director=director, departments=departments, can_edit=(me.get('role') == 'admin'))
-        chart = _seed_petroleum_chart_if_missing()
-        nodes = _fetch_nodes(int(chart['id'])) if chart and chart.get('id') else []
-        petro = _petroleum_layout(chart, nodes)
-        return render_template('orgchart/view.html', brand=brand, chart=chart, nodes=nodes, director=None, departments=[], petro=petro, can_edit=(me.get('role') == 'admin'))
+        chart, nodes, director, departments = _chart_bundle('consulting')
+        return render_template('orgchart/view.html', brand='consulting', chart=chart, nodes=nodes, director=director, departments=departments, can_edit=(me.get('role') == 'admin'))
 
     @app.get('/mod/organigrama/export/<fmt>')
     @page_login_required
@@ -1147,25 +1056,17 @@ def register(app):
         fmt = (fmt or '').strip().lower()
         if fmt not in {'png', 'pdf'}:
             abort(404)
-        brand = get_brand()
-        chart, nodes, director, departments = _chart_bundle(brand)
+        chart, nodes, director, departments = _chart_bundle('consulting')
         if not chart:
             abort(404)
-        filename_root = secure_filename((chart.get('title') or f'organigrama-{brand}').replace(' ', '-').lower()) or f'organigrama-{brand}'
+        filename_root = secure_filename((chart.get('title') or 'organigrama-consulting').replace(' ', '-').lower()) or 'organigrama-consulting'
         inline = request.args.get('inline') in {'1', 'true', 'yes'}
-        if brand == 'petroleum':
-            petro = _petroleum_layout(chart, nodes)
-            if fmt == 'png':
-                data = _export_petroleum_chart_png(chart, petro)
-                return send_file(data, mimetype='image/png', as_attachment=not inline, download_name=f'{filename_root}.png')
-            data = _export_petroleum_chart_pdf(chart, petro)
-            return send_file(data, mimetype='application/pdf', as_attachment=not inline, download_name=f'{filename_root}.pdf')
         if not director:
             abort(404)
         if fmt == 'png':
-            data = _export_chart_png(brand, chart, director, departments)
+            data = _export_chart_png('consulting', chart, director, departments)
             return send_file(data, mimetype='image/png', as_attachment=not inline, download_name=f'{filename_root}.png')
-        data = _export_chart_pdf(brand, chart, director, departments)
+        data = _export_chart_pdf('consulting', chart, director, departments)
         return send_file(data, mimetype='application/pdf', as_attachment=not inline, download_name=f'{filename_root}.pdf')
 
     @app.get('/mod/organigrama/print')
@@ -1185,13 +1086,4 @@ def register(app):
         if me.get('role') != 'admin' and not user_allows_brand(me, 'consulting'):
             abort(403)
         set_brand('consulting')
-        return redirect('/mod/organigrama')
-
-    @app.get('/petroleum/organigrama')
-    @page_login_required
-    def view_petroleum_orgchart_alias():
-        me = ctx.get_me() or {}
-        if me.get('role') != 'admin' and not user_allows_brand(me, 'petroleum'):
-            abort(403)
-        set_brand('petroleum')
         return redirect('/mod/organigrama')

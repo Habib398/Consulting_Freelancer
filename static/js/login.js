@@ -35,24 +35,12 @@ async function doLogin(){
   try{
     await api("/api/auth/login",{method:"POST",body:JSON.stringify({username:document.getElementById("u").value,password:document.getElementById("p").value})});
     const me = await api("/api/me");
-    const role = (me && me.me && me.me.role) ? me.me.role : "";
-    const allowed = (me && me.me && me.me.allowed_brands) ? me.me.allowed_brands : "";
-    if(role==="admin" || (allowed && allowed.includes(","))){
-      location.href="/select-system";
-    }else{
-      let brand = "consulting";
-      if(allowed && allowed.trim().length){
-        brand = allowed.trim().toLowerCase();
-      }
-      try{
-        const brandRes = await api("/api/set-brand",{method:"POST",body:JSON.stringify({brand})});
-        // El backend devuelve la URL correcta según el rol del usuario:
-        // admin → /admin/menu | jefe_estacion → /mod/operational-calendar
-        // operador → /mod/activities | contador/auditor → /staff/menu
-        location.href = brandRes.redirect || "/staff/menu";
-      }catch(_e){
-        location.href = "/staff/menu";
-      }
+    // Always consulting — no brand selector needed
+    try{
+      const brandRes = await api("/api/set-brand",{method:"POST",body:JSON.stringify({brand:"consulting"})});
+      location.href = brandRes.redirect || "/admin/menu";
+    }catch(_e){
+      location.href = "/admin/menu";
     }
   }catch(e){
     err.textContent = "No se pudo iniciar sesión: " + e.message;

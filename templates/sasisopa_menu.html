@@ -13,19 +13,11 @@
   <div class="hub-topbar">
     <div class="hub-brand">
       {% set _brand = session.get('brand','consulting') %}
-      {% if _brand == 'petroleum' %}
-        <img src="/static/img/petroleum-logo.png" alt="PETROLEUM"/>
-        <div>
-          <div class="kicker">Seguridad Operativa</div>
-          <div class="title">SASISOPA</div>
-        </div>
-      {% else %}
         <img src="/static/img/logo.png" alt="CONSULTING"/>
         <div>
           <div class="kicker">Seguridad Operativa</div>
           <div class="title">SASISOPA</div>
         </div>
-      {% endif %}
     </div>
     <div class="hub-actions">
       <a class="btn ghost" href="{{ back_url }}">← Regresar</a>

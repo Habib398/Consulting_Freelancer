@@ -9,36 +9,12 @@ try:
 except Exception:
     _get_brand = None
 
-_REWRITE_PATTERNS = [
-    (re.compile(r"\bactivities\b"), "agenda_activities"),
-    (re.compile(r"\bcalendar_events\b"), "agenda_calendar_events"),
-    (re.compile(r"\bsubmissions\b"), "agenda_submissions"),
-]
-
-def _safe_brand() -> str:
-    # get_brand() uses Flask session; outside request it can raise.
-    if _get_brand is None:
-        return "consulting"
-    try:
-        return _get_brand()
-    except Exception:
-        return "consulting"
-
-def _rewrite_sql(sql: str) -> str:
-    # For Petroleum, map Activities/Calendar/Submissions to independent Agenda tables.
-    if _safe_brand() != "petroleum":
-        return sql
-    out = sql
-    for rx, repl in _REWRITE_PATTERNS:
-        out = rx.sub(repl, out)
-    return out
-
 class BrandCursor(sqlite3.Cursor):
     def execute(self, sql, parameters=()):
-        return super().execute(_rewrite_sql(sql), parameters)
+        return super().execute(sql, parameters)
 
     def executemany(self, sql, seq_of_parameters):
-        return super().executemany(_rewrite_sql(sql), seq_of_parameters)
+        return super().executemany(sql, seq_of_parameters)
 
     def executescript(self, sql_script):
         # Do not rewrite schema scripts; keep base schema stable.
@@ -92,8 +68,6 @@ DB_ENGINE = (os.environ.get("COG_DB_ENGINE") or ("postgres" if is_postgres_env()
 # Shared-cache in-memory DB support for tests (kept alive by a keeper connection)
 _MEM_KEEPER = None  # type: ignore
 
-# In-memory DB support for tests (keep one connection alive)
-_MEM_CONN = None  # type: ignore
 
 def get_conn():
     """Return a DB connection in sqlite or postgres compatibility mode.
@@ -146,17 +120,16 @@ def get_conn():
     return conn
 
 def _close_mem_connections():
-    global _MEM_KEEPER, _MEM_CONN
-    for attr in ("_MEM_KEEPER", "_MEM_CONN"):
-        conn = globals().get(attr)
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
-            globals()[attr] = None
+    global _MEM_KEEPER
+    if _MEM_KEEPER is not None:
+        try:
+            _MEM_KEEPER.close()
+        except Exception:
+            pass
+        _MEM_KEEPER = None
 
 atexit.register(_close_mem_connections)
+
 
 
 # ---------------------------------------------------------------------------
@@ -446,66 +419,7 @@ def _apply_versioned_migrations(conn):
         ''')
         _mark_migration(conn, mid, "Docs workflow + indexes")
 
-    # M4: Petroleum owners + renewal control
-    mid = "2026-03-24_04_petroleum_owner_registry"
-    if not _migration_applied(conn, mid):
-        try:
-            ensure_column(conn, "stations", "petroleum_owner_id", "petroleum_owner_id INTEGER")
-        except Exception:
-            pass
-        _safe_executescript(conn, '''
-        CREATE TABLE IF NOT EXISTS petroleum_owner_catalog (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            short_code TEXT NOT NULL UNIQUE,
-            color_hex TEXT NOT NULL DEFAULT '#D4AF37',
-            phone TEXT,
-            email TEXT,
-            notes TEXT,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
 
-        CREATE TABLE IF NOT EXISTS petroleum_doc_types (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT NOT NULL UNIQUE,
-            title TEXT NOT NULL,
-            accent_color TEXT NOT NULL DEFAULT '#D4AF37',
-            sort_order INTEGER NOT NULL DEFAULT 0,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE TABLE IF NOT EXISTS petroleum_station_control (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            station_id INTEGER NOT NULL,
-            doc_type_id INTEGER NOT NULL,
-            start_date TEXT,
-            renewal_date TEXT,
-            document_status TEXT NOT NULL DEFAULT 'vigente' CHECK(document_status IN ('vigente','debe_documento','en_revision','vencido','no_aplica')),
-            payment_status TEXT NOT NULL DEFAULT 'pendiente' CHECK(payment_status IN ('pagado','pendiente','vencido','no_aplica')),
-            last_payment_date TEXT,
-            amount_due REAL,
-            notes TEXT,
-            created_by INTEGER,
-            updated_by INTEGER,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            updated_at TEXT,
-            UNIQUE(station_id, doc_type_id),
-            FOREIGN KEY(station_id) REFERENCES stations(id) ON DELETE CASCADE,
-            FOREIGN KEY(doc_type_id) REFERENCES petroleum_doc_types(id) ON DELETE CASCADE,
-            FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
-            FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE SET NULL
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_petroleum_station_control_station ON petroleum_station_control(station_id, renewal_date, document_status, payment_status);
-        CREATE INDEX IF NOT EXISTS idx_stations_petroleum_owner ON stations(brand, petroleum_owner_id);
-        INSERT OR IGNORE INTO petroleum_doc_types (code, title, accent_color, sort_order, is_active) VALUES
-            ('nom005', 'NOM-005', '#22C55E', 10, 1),
-            ('nom016', 'NOM-016', '#EF4444', 20, 1),
-            ('anexo3031', 'Anexo 30-31', '#111827', 30, 1);
-        ''')
-        _mark_migration(conn, mid, "Petroleum owners and renewal control")
 
 
     # M3: CAPA / No conformidades (ISO 9001)
@@ -838,7 +752,7 @@ def init_db():
         password_hash TEXT NOT NULL,
         role TEXT NOT NULL CHECK(role IN ('admin','operador','jefe_estacion','contador','auditor')),
         primary_brand TEXT NOT NULL DEFAULT 'consulting',
-        allowed_brands TEXT NOT NULL DEFAULT 'consulting,petroleum',
+        allowed_brands TEXT NOT NULL DEFAULT 'consulting',
         station_id INTEGER,
         is_active INTEGER NOT NULL DEFAULT 1,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -896,67 +810,7 @@ def init_db():
         FOREIGN KEY(reviewed_by) REFERENCES users(id) ON DELETE SET NULL
     );
 
-    /* Independent Agenda tables (Petroleum only; keeps Agenda separate from Consulting Activities) */
-    CREATE TABLE IF NOT EXISTS agenda_activities (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        brand TEXT NOT NULL DEFAULT 'petroleum',
-        title TEXT NOT NULL,
-        description TEXT,
-        evidence_required INTEGER NOT NULL DEFAULT 1,
-        is_active INTEGER NOT NULL DEFAULT 1,
-        created_by INTEGER,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        manual_path TEXT,
-        manual_name TEXT,
-        extra_path TEXT,
-        extra_name TEXT,
-        recurrence TEXT,
-        target_station_id INTEGER,
-        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
-        FOREIGN KEY(target_station_id) REFERENCES stations(id) ON DELETE SET NULL
-    );
 
-    /* Calendar assignments for Agenda (FullCalendar) */
-    CREATE TABLE IF NOT EXISTS agenda_calendar_events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        brand TEXT NOT NULL DEFAULT 'petroleum',
-        activity_id INTEGER,
-        title TEXT NOT NULL,
-        start_date TEXT NOT NULL, /* YYYY-MM-DD */
-        end_date TEXT,           /* optional */
-        repeat_kind TEXT NOT NULL DEFAULT 'once',
-        station_id INTEGER,      /* NULL => all stations */
-        created_by INTEGER,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(activity_id) REFERENCES agenda_activities(id) ON DELETE SET NULL,
-        FOREIGN KEY(station_id) REFERENCES stations(id) ON DELETE CASCADE,
-        FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS agenda_submissions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        brand TEXT NOT NULL DEFAULT 'petroleum',
-        event_id INTEGER,
-        activity_id INTEGER,
-        station_id INTEGER NOT NULL,
-        user_id INTEGER,
-        notes TEXT,
-        evidence_path TEXT,
-        status TEXT NOT NULL DEFAULT 'submitted' CHECK(status IN ('submitted','reviewed','approved','rejected')),
-        score INTEGER,
-        review_notes TEXT,
-        reviewed_by INTEGER,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        reviewed_at TEXT,
-        signature_name TEXT,
-        signature_ip TEXT,
-        signature_at TEXT,
-        FOREIGN KEY(event_id) REFERENCES agenda_calendar_events(id) ON DELETE SET NULL,
-        FOREIGN KEY(activity_id) REFERENCES agenda_activities(id) ON DELETE SET NULL,
-        FOREIGN KEY(station_id) REFERENCES stations(id) ON DELETE CASCADE,
-        FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
-        FOREIGN KEY(reviewed_by) REFERENCES users(id) ON DELETE SET NULL
-    );
 
 
     CREATE TABLE IF NOT EXISTS pipas (
@@ -1169,7 +1023,7 @@ CREATE TABLE IF NOT EXISTS user_station_access (
     FOREIGN KEY(station_id) REFERENCES stations(id) ON DELETE CASCADE
 );
 
-/* Petroleum: interactive compliance screen */
+/* Interactive compliance screen */
 CREATE TABLE IF NOT EXISTS compliance_items (        brand TEXT NOT NULL DEFAULT 'consulting',
 
     code TEXT PRIMARY KEY,
@@ -1179,7 +1033,7 @@ CREATE TABLE IF NOT EXISTS compliance_items (        brand TEXT NOT NULL DEFAULT
     sort_order INTEGER NOT NULL DEFAULT 0);
 
 CREATE TABLE IF NOT EXISTS compliance_records (
-    brand TEXT NOT NULL DEFAULT 'petroleum',
+    brand TEXT NOT NULL DEFAULT 'consulting',
     station_id INTEGER NOT NULL,
     item_code TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','in_review','approved','rejected')),
@@ -1194,7 +1048,7 @@ CREATE TABLE IF NOT EXISTS compliance_records (
 
 CREATE TABLE IF NOT EXISTS compliance_files (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    brand TEXT NOT NULL DEFAULT 'petroleum',
+    brand TEXT NOT NULL DEFAULT 'consulting',
     station_id INTEGER NOT NULL,
     item_code TEXT NOT NULL,
     version INTEGER NOT NULL,
@@ -1206,21 +1060,7 @@ CREATE TABLE IF NOT EXISTS compliance_files (
     FOREIGN KEY(item_code) REFERENCES compliance_items(code) ON DELETE CASCADE
 );
 
-/* Petroleum norm/annex documents by fuel type (global, versioned) */
-CREATE TABLE IF NOT EXISTS petroleum_norm_files (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    brand TEXT NOT NULL DEFAULT 'petroleum',
-    fuel_type TEXT NOT NULL,                -- magna|premium|diesel|other
-    doc_key TEXT NOT NULL,                  -- nom_005|nom_016|anexo_30_31|...
-    title TEXT NOT NULL,
-    version INTEGER NOT NULL,
-    stored_path TEXT NOT NULL,
-    original_name TEXT,
-    uploaded_by INTEGER,
-    uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(brand, fuel_type, doc_key, version),
-    FOREIGN KEY(uploaded_by) REFERENCES users(id) ON DELETE SET NULL
-);
+
 
 
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -1285,11 +1125,11 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
     try:
         ensure_column(conn, "users", "primary_brand", "primary_brand TEXT NOT NULL DEFAULT 'consulting'")
         ensure_column(conn, "users", "email", "email TEXT")
-        ensure_column(conn, "users", "allowed_brands", "allowed_brands TEXT NOT NULL DEFAULT 'consulting,petroleum'")
+        ensure_column(conn, "users", "allowed_brands", "allowed_brands TEXT NOT NULL DEFAULT 'consulting'")
     except Exception:
         pass
 
-    # Petroleum compliance: expiry fields (traffic light)
+    # Compliance: expiry fields (traffic light)
     try:
         ensure_column(conn, "compliance_records", "issue_date", "issue_date TEXT")
         ensure_column(conn, "compliance_records", "expiry_date", "expiry_date TEXT")
@@ -1317,7 +1157,7 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
     # Lightweight migrations (add missing columns on existing DBs)
     ensure_column(conn, "calendar_events", "repeat_kind", "repeat_kind TEXT NOT NULL DEFAULT 'once'")
 
-    # Multi-company support (Consulting / Petroleum)
+    # Multi-company support
     ensure_column(conn, "stations", "brand", "brand TEXT NOT NULL DEFAULT 'consulting'")
     ensure_column(conn, "users", "allowed_brands", "allowed_brands TEXT NOT NULL DEFAULT 'consulting'")
     ensure_column(conn, "users", "primary_brand", "primary_brand TEXT NOT NULL DEFAULT 'consulting'")
@@ -1638,7 +1478,7 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
 
     CREATE TABLE IF NOT EXISTS normative_catalog (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        brand TEXT NOT NULL DEFAULT 'petroleum',
+        brand TEXT NOT NULL DEFAULT 'consulting',
         code TEXT,
         title TEXT NOT NULL,
         category TEXT NOT NULL,
@@ -1652,7 +1492,7 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
 
     CREATE TABLE IF NOT EXISTS normativas (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        brand TEXT NOT NULL DEFAULT 'petroleum',
+        brand TEXT NOT NULL DEFAULT 'consulting',
         station_id INTEGER NOT NULL,
         catalog_id INTEGER,
         norma_title TEXT NOT NULL,
@@ -2017,9 +1857,6 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
                 ('consulting', 'Acceso', '¿Cómo inicio sesión?', 'Usa tu usuario y contraseña. Si eres admin, después eliges empresa desde el selector. Si eres operador o jefe, entras directo a tu panel según permisos.', 1, 10),
                 ('consulting', 'Documentos', '¿Cómo subo documentos?', 'Ve al módulo correspondiente, captura o adjunta el archivo y confirma el envío. Los documentos con control requieren revisión y quedan auditados.', 1, 20),
                 ('consulting', 'Notificaciones', '¿Cómo llegan las alertas?', 'Las alertas llegan dentro del sistema y también por correo. Si está configurado, también pueden salir por webhook de WhatsApp.', 0, 30),
-                ('petroleum', 'Cumplimiento', '¿Qué muestra el semáforo?', 'Resume alertas, pagos, pendientes documentales y próximos vencimientos para cada estación.', 1, 10),
-                ('petroleum', 'Documentos', '¿Cómo veo versiones y comparaciones?', 'Desde el centro documental puedes revisar historial, comparar versiones y restaurar la versión necesaria.', 1, 20),
-                ('petroleum', 'Soporte', '¿Dónde veo ayuda rápida?', 'En el centro de ayuda encuentras preguntas frecuentes, enlaces oficiales y pasos de operación por módulo.', 0, 30),
             ],
         )
     try:
@@ -2033,17 +1870,6 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
                 'primary_color': '#86B821',
                 'secondary_color': '#2C7BE5',
                 'public_url': 'https://consultinghme.com/',
-                'hero_title': 'Sistema Corporativo de Gestión y Cumplimiento',
-                'hero_text': 'Plataforma interna para la gestión operativa, cumplimiento normativo y control documental de estaciones y proyectos energéticos.',
-            },
-            'petroleum': {
-                'display_name': 'Petroleum IU',
-                'subtitle': 'Oil & Gas Inspection Unit',
-                'system_title': 'PETROLEUM • Work Log',
-                'system_subtitle': 'Oil & Gas Inspection Unit',
-                'primary_color': '#C8A24A',
-                'secondary_color': '#7C3AED',
-                'public_url': 'https://petroleumiu.com/',
                 'hero_title': 'Sistema Corporativo de Gestión y Cumplimiento',
                 'hero_text': 'Plataforma interna para la gestión operativa, cumplimiento normativo y control documental de estaciones y proyectos energéticos.',
             },
@@ -2088,19 +1914,6 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
     ensure_column(conn, "activities", "recurrence", "recurrence TEXT")
     ensure_column(conn, "activities", "target_station_id", "target_station_id INTEGER")
 
-    # Petroleum Agenda runs on independent agenda_* tables, so keep those schema upgrades in sync too.
-    ensure_column(conn, "agenda_activities", "manual_path", "manual_path TEXT")
-    ensure_column(conn, "agenda_activities", "manual_name", "manual_name TEXT")
-    ensure_column(conn, "agenda_activities", "extra_path", "extra_path TEXT")
-    ensure_column(conn, "agenda_activities", "extra_name", "extra_name TEXT")
-    ensure_column(conn, "agenda_activities", "recurrence", "recurrence TEXT")
-    ensure_column(conn, "agenda_activities", "target_station_id", "target_station_id INTEGER")
-
-    ensure_column(conn, "agenda_submissions", "signature_name", "signature_name TEXT")
-    ensure_column(conn, "agenda_submissions", "signature_ip", "signature_ip TEXT")
-    ensure_column(conn, "agenda_submissions", "signature_at", "signature_at TEXT")
-    ensure_column(conn, "agenda_submissions", "signature_role", "signature_role TEXT")
-
     # Apply versioned migrations (ISO-friendly)
     try:
         _apply_versioned_migrations(conn)
@@ -2114,7 +1927,7 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
         admin_pass = os.environ.get("COG_ADMIN_PASS") or "admin123"
         cur.execute(
             "INSERT INTO users (username, password_hash, role, station_id, allowed_brands, primary_brand) VALUES (?,?,?,NULL,?,?)",
-            (admin_user, generate_password_hash(admin_pass), "admin", "consulting,petroleum", "consulting"),
+            (admin_user, generate_password_hash(admin_pass), "admin", "consulting", "consulting"),
         )
         conn.commit()
 
@@ -2150,43 +1963,6 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
             pass
 
     
-# Seed Petroleum compliance items (safe; only if empty)
-    cur.execute("SELECT COUNT(*) AS c FROM compliance_items")
-    if cur.fetchone()["c"] == 0:
-        items = [
-            ("station_info", "Datos de estación (Razón social / Permiso / No. estación)", "Captura o documento que respalde razón social, número de permiso y número de estación.", "Identificación", 10),
-            ("nom_005", "NOM-005", "Documentación y evidencias relacionadas con NOM-005.", "Normatividad", 20),
-            ("nom_016", "NOM-016", "Documentación y evidencias relacionadas con NOM-016.", "Normatividad", 30),
-            ("anexo_30_31", "ANEXO 30-31", "Evidencias y archivos de Anexo 30-31.", "Normatividad", 40),
-            ("muestreos", "Muestreos", "Registros, resultados y evidencias de muestreos.", "Operación", 50),
-            ("auditoria_sasisopa", "Auditoría SASISOPA", "Reportes, actas y evidencias de auditoría SASISOPA.", "SASISOPA", 60),
-            ("dictaminacion_sasisopa", "Dictaminación SASISOPA", "Dictámenes, resolutivos y evidencias de dictaminación.", "SASISOPA", 70),
-            ("doc_left", "Documento soporte (izquierda)", "Documento adicional relacionado al cumplimiento.", "Documentos", 80),
-            ("doc_right_top", "Documento soporte (derecha superior)", "Documento adicional relacionado al cumplimiento.", "Documentos", 90),
-            ("doc_right_bottom", "Documento soporte (derecha inferior)", "Documento adicional relacionado al cumplimiento.", "Documentos", 100),
-        ]
-        cur.executemany(
-            "INSERT INTO compliance_items (code, title, description, section, sort_order) VALUES (?,?,?,?,?)",
-            items,
-        )
-        conn.commit()
-
-
-    cur.execute("SELECT COUNT(*) AS c FROM normative_catalog")
-    if cur.fetchone()["c"] == 0:
-        cur.executemany(
-            "INSERT INTO normative_catalog (brand, code, title, category, description, periodicity, default_risk, sort_order, is_active) VALUES (?,?,?,?,?,?,?,?,?)",
-            [
-                ('petroleum', 'nom005', 'NOM-005', 'Seguridad', 'Control de seguridad y operación relacionado con NOM-005.', 'mensual', 'alto', 10, 1),
-                ('petroleum', 'nom016', 'NOM-016', 'Documentacion legal', 'Verificación documental y técnica de NOM-016.', 'trimestral', 'alto', 20, 1),
-                ('petroleum', 'anexo3031', 'Anexo 30-31', 'Verificaciones', 'Seguimiento de anexos y evidencias regulatorias.', 'mensual', 'medio', 30, 1),
-                ('petroleum', 'muestreos', 'Muestreos', 'Ambiental', 'Muestreos, resultados y carga de evidencia.', 'mensual', 'medio', 40, 1),
-                ('petroleum', 'auditoria_sasisopa', 'Auditoria SASISOPA', 'Inspeccion', 'Auditorias, observaciones y cierre de hallazgos.', 'anual', 'critico', 50, 1),
-                ('petroleum', 'dictamen', 'Dictaminacion', 'Documentacion legal', 'Dictámenes, resolutivos y documentación soporte.', 'anual', 'alto', 60, 1),
-            ],
-        )
-        conn.commit()
-
     cur.execute("SELECT COUNT(*) AS c FROM expediente_templates")
     if cur.fetchone()["c"] == 0:
         cur.executemany(
@@ -2198,12 +1974,6 @@ CREATE TABLE IF NOT EXISTS evidence_photos (
                 ('consulting', 'tramites', 'permiso_operativo', 'Permiso / licencia operativa', 'Permiso, licencia o resolución asociada al trámite.', 1, 365, 40, 1),
                 ('consulting', 'tramites', 'comprobante_domicilio', 'Comprobante de domicilio', 'Comprobante reciente del cliente o instalación.', 0, 180, 50, 1),
                 ('consulting', 'tramites', 'contrato_servicio', 'Contrato / carta de servicio', 'Soporte contractual del servicio o gestión.', 0, 730, 60, 1),
-                ('petroleum', 'normativas', 'permiso_cre', 'Permiso CRE / título aplicable', 'Documento legal base de la estación o permiso vigente.', 1, 365, 10, 1),
-                ('petroleum', 'normativas', 'poliza_seguro', 'Póliza de seguro vigente', 'Cobertura de responsabilidad civil y riesgos aplicables.', 1, 365, 20, 1),
-                ('petroleum', 'normativas', 'programa_mantenimiento', 'Programa de mantenimiento', 'Programa y evidencia de mantenimiento preventivo.', 1, 180, 30, 1),
-                ('petroleum', 'normativas', 'bitacora_operacion', 'Bitácora de operación', 'Registros operativos actualizados.', 1, 30, 40, 1),
-                ('petroleum', 'normativas', 'capacitacion_seguridad', 'Constancias de capacitación', 'Capacitaciones del personal y seguridad.', 1, 365, 50, 1),
-                ('petroleum', 'normativas', 'dictamen_electrico', 'Dictamen / verificación técnica', 'Dictámenes técnicos, eléctricos o de inspección.', 0, 365, 60, 1),
             ],
         )
         conn.commit()

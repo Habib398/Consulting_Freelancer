@@ -102,7 +102,6 @@ def register(app):
             "ok": True,
             "brands": {
                 "consulting": get_branding_settings("consulting"),
-                "petroleum": get_branding_settings("petroleum"),
             },
             "runtime_scheduler_enabled": current_app.extensions.get("runtime_scheduler_started", False),
         })

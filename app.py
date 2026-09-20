@@ -6,8 +6,6 @@ import uuid
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from flask import Flask, jsonify, request, g
-
 
 def _load_env_file(env_path: Path) -> None:
     """Small .env loader without extra dependency."""
@@ -54,7 +52,6 @@ import modules.stations as mod_stations
 import modules.operations as mod_operations
 import modules.compliance as mod_compliance
 import modules.admin as mod_admin
-import modules.petroleum as mod_petroleum
 
 
 def _setup_logging(app: Flask, base_dir: Path) -> None:
@@ -166,32 +163,8 @@ def create_app() -> Flask:
 
     @app.before_request
     def _enforce_brand_access():
-        """Valida que el brand activo en sesión esté permitido para el usuario.
-
-        Previene acceso cruzado entre compañías (consulting ↔ petroleum).
-        Activa automáticamente el brand petroleum en rutas de módulo petroleum.
-        """
-        try:
-            if session.get("user_id"):
-                from db import get_user
-                me = get_user(session.get("user_id")) or {}
-                role = (me.get("role") or "").strip().lower()
-
-                # Usuarios no-admin solo operan dentro de sus brands permitidos
-                if role != "admin":
-                    allowed = parse_allowed_brands(me.get("allowed_brands"))
-                    active = (session.get("brand") or "consulting").strip().lower()
-                    if active not in allowed:
-                        set_brand(sorted(list(allowed))[0] if allowed else "consulting")
-
-                # Auto-activar brand petroleum en rutas del módulo petroleum
-                path_ = (request.path or "")
-                if path_.startswith("/petroleum") or path_.startswith("/api/compliance") or path_.startswith("/api/petroleum/"):
-                    allowed = {"consulting", "petroleum"} if role == "admin" else parse_allowed_brands(me.get("allowed_brands"))
-                    if "petroleum" in allowed:
-                        session["brand"] = "petroleum"
-        except Exception:
-            pass
+        """Garantiza que el brand activo en sesión sea siempre consulting."""
+        session["brand"] = "consulting"
 
     @app.before_request
     def _enforce_write_rate_limit():
@@ -265,7 +238,7 @@ def create_app() -> Flask:
         resp.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
 
         # Avoid stale UI / API caching (common source of "no se ven" inputs)
-        if request.path.startswith(("/api/", "/admin", "/petroleum", "/mod", "/login", "/select-system")):
+        if request.path.startswith(("/api/", "/admin", "/mod", "/login")):
             resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             resp.headers["Pragma"] = "no-cache"
 
@@ -309,8 +282,6 @@ def create_app() -> Flask:
         return resp
 
     # --- Error handlers (prevents silent http_500) ---
-    from werkzeug.exceptions import RequestEntityTooLarge
-
     @app.errorhandler(RequestEntityTooLarge)
     def too_large(err):
         if _wants_json():
@@ -413,17 +384,14 @@ def create_app() -> Flask:
     mod_operations.register(app)  # Actividades, pipas, mantenimiento, alertas, pagos
     mod_compliance.register(app)  # Documentos, normativas, CAPA y auditoría
     mod_admin.register(app)       # Admin, reportes, analítica y organigrama
-    mod_petroleum.register(app)   # Funcionalidad exclusiva Petroleum
 
     # Inyecta CSRF token + branding + sección activa en todos los templates
     @app.context_processor
     def _inject_csrf():
-        active = (session.get("brand") or "consulting").strip().lower()
         return {
             "csrf_token": getattr(g, "csrf_token", ""),
-            "brand_settings": get_branding_settings(active),
+            "brand_settings": get_branding_settings("consulting"),
             "brand_cfg": get_branding_settings,
-            "petroleum_norms": get_normative_config('petroleum'),
             "norm_cfg": get_normative_config,
             "norm_items": get_normative_items,
             "norm_titles_line": get_normative_titles_line,

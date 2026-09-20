@@ -66,59 +66,21 @@ DEFAULT_BRAND_SETTINGS = {
         "norms_anexo3031_icon": "📁",
         "norms_anexo3031_description": "Expediente regulatorio, anexos y trazabilidad documental por estación.",
     },
-    "petroleum": {
-        "display_name": "Petroleum IU",
-        "subtitle": "Oil & Gas Inspection Unit",
-        "system_title": "PETROLEUM • Work Log",
-        "system_subtitle": "Oil & Gas Inspection Unit",
-        "primary_color": "#C8A24A",
-        "secondary_color": "#7C3AED",
-        "public_url": "https://petroleumiu.com/",
-        "support_email": "",
-        "hero_title": "Sistema Corporativo de Gestión y Cumplimiento",
-        "hero_text": "Plataforma interna para la gestión operativa, cumplimiento normativo y control documental de estaciones y proyectos energéticos.",
-        "logo_path": "",
-        "logo_square_path": "",
-        "mail_provider": "auto",
-        "ses_region": "",
-        "ses_from": "",
-        "ses_configuration_set": "",
-        "smtp_host": "",
-        "smtp_port": "587",
-        "smtp_user": "",
-        "smtp_pass": "",
-        "smtp_from": "",
-        "app_url": "",
-        "whatsapp_webhook_url": "",
-        "norms_nom005_title": "NOM-005",
-        "norms_nom005_badge": "NOM",
-        "norms_nom005_color": "#22C55E",
-        "norms_nom005_order": "10",
-        "norms_nom005_enabled": "1",
-        "norms_nom005_icon": "⛽",
-        "norms_nom005_description": "Control operativo y documental para la NOM-005 en estaciones y procesos petrolíferos.",
-        "norms_nom016_title": "NOM-016",
-        "norms_nom016_badge": "NOM",
-        "norms_nom016_color": "#EF4444",
-        "norms_nom016_order": "20",
-        "norms_nom016_enabled": "1",
-        "norms_nom016_icon": "🧪",
-        "norms_nom016_description": "Seguimiento técnico y evidencias para calidad de combustibles bajo NOM-016.",
-        "norms_anexo3031_title": "Anexo 30-31",
-        "norms_anexo3031_badge": "ANEXO",
-        "norms_anexo3031_color": "#111827",
-        "norms_anexo3031_order": "30",
-        "norms_anexo3031_enabled": "1",
-        "norms_anexo3031_icon": "📁",
-        "norms_anexo3031_description": "Expediente regulatorio, anexos y trazabilidad documental por estación.",
-    },
 }
+
+
+import time as _time
+_branding_cache: dict = {}
+_BRANDING_TTL = 300  # 5 minutos
 
 
 def get_branding_settings(brand: str | None = None) -> dict:
     b = (brand or "consulting").strip().lower()
     if b not in DEFAULT_BRAND_SETTINGS:
         b = "consulting"
+    cached = _branding_cache.get(b)
+    if cached and (_time.time() - cached["ts"]) < _BRANDING_TTL:
+        return cached["data"]
     data = dict(DEFAULT_BRAND_SETTINGS[b])
     try:
         conn = get_conn(); cur = conn.cursor()
@@ -133,7 +95,14 @@ def get_branding_settings(brand: str | None = None) -> dict:
             conn.close()
         except Exception:
             pass
+    _branding_cache[b] = {"data": data, "ts": _time.time()}
     return data
+
+
+def invalidate_branding_cache(brand: str | None = None) -> None:
+    """Llama esto después de guardar cambios de branding para que el caché se refresque."""
+    b = (brand or "consulting").strip().lower()
+    _branding_cache.pop(b, None)
 
 
 def set_branding_settings(brand: str, values: dict) -> None:
@@ -148,6 +117,7 @@ def set_branding_settings(brand: str, values: dict) -> None:
             (b, str(key), str(value or "")),
         )
     conn.commit(); conn.close()
+    invalidate_branding_cache(b)
 
 
 def get_setting_fallback(key: str, brand: str | None = None, default: str = "") -> str:
@@ -157,7 +127,8 @@ def get_setting_fallback(key: str, brand: str | None = None, default: str = "") 
     brands = []
     if brand:
         brands.append((brand or "consulting").strip().lower())
-    brands.extend([b for b in ("consulting", "petroleum") if b not in brands])
+    if "consulting" not in brands:
+        brands.append("consulting")
     try:
         conn = get_conn(); cur = conn.cursor()
         for b in brands:
@@ -230,8 +201,8 @@ def _clean_description(value: str, default: str) -> str:
 
 
 
-def get_normative_config(brand: str | None = 'petroleum') -> dict:
-    cfg = get_branding_settings(brand or 'petroleum')
+def get_normative_config(brand: str | None = 'consulting') -> dict:
+    cfg = get_branding_settings(brand or 'consulting')
     data = {}
     for code, meta in NORMATIVE_DEFAULTS.items():
         title_key = f'norms_{code}_title'
@@ -256,7 +227,7 @@ def get_normative_config(brand: str | None = 'petroleum') -> dict:
     return data
 
 
-def get_normative_items(brand: str | None = 'petroleum', visible_only: bool = False) -> list[dict]:
+def get_normative_items(brand: str | None = 'consulting', visible_only: bool = False) -> list[dict]:
     items = []
     for code, meta in get_normative_config(brand).items():
         row = {'code': code, **meta}
@@ -267,7 +238,7 @@ def get_normative_items(brand: str | None = 'petroleum', visible_only: bool = Fa
     return items
 
 
-def get_normative_titles_line(brand: str | None = 'petroleum') -> str:
+def get_normative_titles_line(brand: str | None = 'consulting') -> str:
     titles = [item['title'] for item in get_normative_items(brand, visible_only=True)]
     if not titles:
         titles = [item['title'] for item in get_normative_items(brand, visible_only=False)]

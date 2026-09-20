@@ -455,31 +455,74 @@ def register(app):
     @role_required("admin")
     def api_admin_semaphore():
         brand = get_brand()
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute("SELECT id, code, name FROM stations WHERE brand=? ORDER BY code ASC, id ASC", (brand,))
-        stations = [dict(r) for r in cur.fetchall()]
+        with __import__("db").db_conn() as conn:
+            cur = conn.cursor()
+
+            cur.execute(
+                "SELECT id, code, name FROM stations WHERE brand=? ORDER BY code ASC, id ASC",
+                (brand,),
+            )
+            stations = [dict(r) for r in cur.fetchall()]
+
+            # Alertas abiertas por estación — una sola query
+            cur.execute(
+                "SELECT station_id, COUNT(*) AS c FROM alerts"
+                " WHERE brand=? AND status='open' GROUP BY station_id",
+                (brand,),
+            )
+            alerts_map = {int(r["station_id"]): int(r["c"]) for r in cur.fetchall()}
+
+            # Pagos pendientes — una sola query
+            cur.execute(
+                "SELECT station_id, COUNT(*) AS c FROM payments"
+                " WHERE brand=? AND status='pending' GROUP BY station_id",
+                (brand,),
+            )
+            payments_map = {int(r["station_id"]): int(r["c"]) for r in cur.fetchall()}
+
+            # Documentos pendientes — una sola query
+            cur.execute(
+                "SELECT station_id, COUNT(*) AS c FROM doc_requirements"
+                " WHERE brand=? AND status IN ('OPEN','REJECTED','SUBMITTED') GROUP BY station_id",
+                (brand,),
+            )
+            docs_map = {int(r["station_id"]): int(r["c"]) for r in cur.fetchall()}
+
+            # Compliance expirando (solo brand petroleum) — una sola query
+            compliance_map: dict = {}
+            if brand == "petroleum":
+                exp_limit = (_today() + datetime.timedelta(days=30)).isoformat()
+                cur.execute(
+                    "SELECT station_id, COUNT(*) AS c FROM compliance_records"
+                    " WHERE brand=? AND expiry_date IS NOT NULL AND date(expiry_date) <= date(?)"
+                    " GROUP BY station_id",
+                    (brand, exp_limit),
+                )
+                compliance_map = {int(r["station_id"]): int(r["c"]) for r in cur.fetchall()}
+
         rows = []
         for st in stations:
             sid = int(st["id"])
-            cur.execute("SELECT COUNT(*) AS c FROM alerts WHERE brand=? AND station_id=? AND status='open'", (brand, sid))
-            alerts_open = int(cur.fetchone()["c"] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM payments WHERE brand=? AND station_id=? AND status='pending'", (brand, sid))
-            payments_pending = int(cur.fetchone()["c"] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_requirements WHERE brand=? AND station_id=? AND status IN ('OPEN','REJECTED','SUBMITTED')", (brand, sid))
-            docs_pending = int(cur.fetchone()["c"] or 0)
-            compliance_expiring = 0
-            if brand == 'petroleum':
-                cur.execute("SELECT COUNT(*) AS c FROM compliance_records WHERE brand=? AND station_id=? AND expiry_date IS NOT NULL AND date(expiry_date) <= date(?)", (brand, sid, (_today() + datetime.timedelta(days=30)).isoformat()))
-                compliance_expiring = int(cur.fetchone()["c"] or 0)
+            alerts_open = alerts_map.get(sid, 0)
+            payments_pending = payments_map.get(sid, 0)
+            docs_pending = docs_map.get(sid, 0)
+            compliance_expiring = compliance_map.get(sid, 0)
             score = (
-                alerts_open      * _SEMAPHORE_WEIGHT_ALERTS
-                + payments_pending  * _SEMAPHORE_WEIGHT_PAYMENTS
-                + docs_pending      * _SEMAPHORE_WEIGHT_DOCS
+                alerts_open          * _SEMAPHORE_WEIGHT_ALERTS
+                + payments_pending   * _SEMAPHORE_WEIGHT_PAYMENTS
+                + docs_pending       * _SEMAPHORE_WEIGHT_DOCS
                 + compliance_expiring * _SEMAPHORE_WEIGHT_COMPLIANCE
             )
-            color = 'green' if score == 0 else 'yellow' if score <= _SEMAPHORE_YELLOW_THRESHOLD else 'red'
-            rows.append({**st, 'alerts_open': alerts_open, 'payments_pending': payments_pending, 'docs_pending': docs_pending, 'compliance_expiring': compliance_expiring, 'score': score, 'color': color})
-        conn.close()
+            color = "green" if score == 0 else "yellow" if score <= _SEMAPHORE_YELLOW_THRESHOLD else "red"
+            rows.append({
+                **st,
+                "alerts_open": alerts_open,
+                "payments_pending": payments_pending,
+                "docs_pending": docs_pending,
+                "compliance_expiring": compliance_expiring,
+                "score": score,
+                "color": color,
+            })
         return jsonify({"ok": True, "rows": rows})
 
     @app.get("/api/admin/kpi-trends")
@@ -487,21 +530,52 @@ def register(app):
     @role_required("admin")
     def api_admin_kpi_trends():
         brand = get_brand()
-        today = _today().replace(day=1)
-        conn = get_conn(); cur = conn.cursor()
+        today = _today()
+        # Límite inferior: inicio del mes de hace 5 meses
+        six_months_ago = _add_months(today.replace(day=1), -5)
+
+        with __import__("db").db_conn() as conn:
+            cur = conn.cursor()
+
+            # Alertas por mes — una sola query con GROUP BY
+            cur.execute(
+                "SELECT strftime('%Y-%m', created_at) AS month, COUNT(*) AS c"
+                " FROM alerts WHERE brand=? AND date(created_at) >= date(?)"
+                " GROUP BY month ORDER BY month",
+                (brand, six_months_ago.isoformat()),
+            )
+            alerts_by_month = {r["month"]: int(r["c"]) for r in cur.fetchall()}
+
+            # Submissions aprobadas por mes — una sola query
+            cur.execute(
+                "SELECT strftime('%Y-%m', created_at) AS month, COUNT(*) AS c"
+                " FROM submissions WHERE brand=? AND status<>'rejected'"
+                " AND date(created_at) >= date(?) GROUP BY month ORDER BY month",
+                (brand, six_months_ago.isoformat()),
+            )
+            subs_by_month = {r["month"]: int(r["c"]) for r in cur.fetchall()}
+
+            # Doc submissions por mes — una sola query
+            cur.execute(
+                "SELECT strftime('%Y-%m', submitted_at) AS month, COUNT(*) AS c"
+                " FROM doc_submissions WHERE brand=?"
+                " AND date(submitted_at) >= date(?) GROUP BY month ORDER BY month",
+                (brand, six_months_ago.isoformat()),
+            )
+            docs_by_month = {r["month"]: int(r["c"]) for r in cur.fetchall()}
+
         rows = []
         for i in range(5, -1, -1):
-            m0 = _add_months(today, -i)
-            m1 = _add_months(m0, 1)
-            cur.execute("SELECT COUNT(*) AS c FROM alerts WHERE brand=? AND date(created_at)>=date(?) AND date(created_at)<date(?)", (brand, m0.isoformat(), m1.isoformat()))
-            alerts = int(cur.fetchone()["c"] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM submissions WHERE brand=? AND date(created_at)>=date(?) AND date(created_at)<date(?) AND status<>'rejected'", (brand, m0.isoformat(), m1.isoformat()))
-            submissions = int(cur.fetchone()["c"] or 0)
-            cur.execute("SELECT COUNT(*) AS c FROM doc_submissions WHERE brand=? AND date(submitted_at)>=date(?) AND date(submitted_at)<date(?)", (brand, m0.isoformat(), m1.isoformat()))
-            docs = int(cur.fetchone()["c"] or 0)
-            rows.append({"month": m0.strftime("%Y-%m"), "alerts": alerts, "submissions": submissions, "docs": docs})
-        conn.close()
+            m0 = _add_months(today.replace(day=1), -i)
+            month_key = m0.strftime("%Y-%m")
+            rows.append({
+                "month": month_key,
+                "alerts": alerts_by_month.get(month_key, 0),
+                "submissions": subs_by_month.get(month_key, 0),
+                "docs": docs_by_month.get(month_key, 0),
+            })
         return jsonify({"ok": True, "rows": rows})
+
 
     @app.get("/mod/evidencias")
     @login_required

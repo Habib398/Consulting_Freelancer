@@ -31,13 +31,19 @@ class AppContext:
         return datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
     def get_me(self):
+        from flask import g
+        if hasattr(g, "_cached_me"):
+            return g._cached_me
         uid = session.get("user_id")
         if not uid:
+            g._cached_me = None
             return None
         me = get_user(uid)
         if not me:
             session.clear()
+            g._cached_me = None
             return None
+        g._cached_me = me
         return me
 
     def login_required(self, fn):

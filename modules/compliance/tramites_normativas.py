@@ -702,7 +702,7 @@ def register(app):
     @login_required
     @role_required('admin')
     def normativas_page():
-        return render_template('petroleum/control_vigencias.html')
+        return redirect('/admin/document-center')
 
     @app.get('/api/normativas/meta')
     @login_required
@@ -947,7 +947,7 @@ def register(app):
     @login_required
     @role_required('admin', 'jefe_estacion', 'operador', 'auditor', 'contador')
     def expediente_normativas_page():
-        return render_template('petroleum/expedientes.html', expediente_area='normativas')
+        return redirect('/admin/document-center')
 
     @app.get('/api/expedientes/meta')
     @login_required

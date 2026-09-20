@@ -32,14 +32,7 @@ def register_module(app, *, brand: str | None = None, module_key: str, module_la
     staff_base = f"/staff/{route_segment}/docs"
 
     def _brand() -> str:
-        fixed = (brand or "").strip().lower() if isinstance(brand, str) else ""
-        if fixed in {"consulting", "petroleum"}:
-            return fixed
-        try:
-            current = (get_brand() or "consulting").strip().lower()
-        except Exception:
-            current = "consulting"
-        return current if current in {"consulting", "petroleum"} else "consulting"
+        return "consulting"
 
     def _now_iso() -> str:
         return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")

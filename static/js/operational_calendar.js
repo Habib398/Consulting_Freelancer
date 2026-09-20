@@ -39,7 +39,7 @@
   };
   const STATUS_LABEL = {
     open: 'Abierto', pending: 'Pendiente', submitted: 'Completada',
-    approved: 'Completada', rejected: 'Rechazado', closed: 'Cerrado',
+    approved: 'Completada', closed: 'Cerrado',
   };
 
   function fmtDate(s) {
