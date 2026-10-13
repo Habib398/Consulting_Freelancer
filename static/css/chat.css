@@ -182,13 +182,26 @@
   flex-direction: row-reverse;
 }
 
-.chat-bubble {
+/* Columna remitente + burbuja: limita el ancho y alinea segun el lado */
+.chat-bubble-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   max-width: 68%;
+  min-width: 0;
+}
+
+.chat-bubble-row.mine .chat-bubble-col {
+  align-items: flex-end;
+}
+
+.chat-bubble {
+  max-width: 100%;
   padding: 9px 14px;
   border-radius: 16px;
   font-size: 13.5px;
   line-height: 1.5;
-  word-break: break-word;
+  overflow-wrap: break-word;
   white-space: pre-wrap;
 }
 
@@ -302,7 +315,7 @@
     width: 220px;
     min-width: 180px;
   }
-  .chat-bubble {
+  .chat-bubble-col {
     max-width: 85%;
   }
 }

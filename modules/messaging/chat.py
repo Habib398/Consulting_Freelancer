@@ -18,12 +18,18 @@ def _utcnow() -> str:
 
 
 def _get_session_user():
-    """Devuelve (user_id, role, station_id) desde la sesion activa."""
-    return (
-        session.get("user_id"),
-        session.get("role"),
-        session.get("station_id"),
-    )
+    """Devuelve (user_id, role, station_id) del usuario activo.
+
+    station_id se lee de la tabla users porque el login no lo guarda en sesion.
+    """
+    uid = session.get("user_id")
+    station_id = None
+    if uid:
+        with db_conn() as conn:
+            row = conn.execute("SELECT station_id FROM users WHERE id=?", (uid,)).fetchone()
+        if row:
+            station_id = row["station_id"]
+    return uid, session.get("role"), station_id
 
 
 def _user_can_access_room(room: dict, user_id: int, role: str, station_id) -> bool:

@@ -176,7 +176,9 @@
     const container = document.getElementById("chatMessages");
     if (!append) container.innerHTML = "";
 
-    let lastDate = append ? "__unknown__" : null;
+    // Al anexar, continuar desde el ultimo divisor ya pintado para no repetir la fecha
+    const dividers = container.querySelectorAll(".chat-date-divider");
+    let lastDate = append && dividers.length ? dividers[dividers.length - 1].textContent : null;
 
     msgs.forEach(msg => {
       const msgDate = fmtDate(msg.created_at);
@@ -192,7 +194,7 @@
       const row    = document.createElement("div");
       row.className = "chat-bubble-row " + (isMine ? "mine" : "theirs");
       row.innerHTML = `
-        <div>
+        <div class="chat-bubble-col">
           ${!isMine ? `<div class="chat-bubble-sender">${escHtml(msg.sender_name || "")}</div>` : ""}
           <div class="chat-bubble ${isMine ? "mine" : "theirs"}">${escHtml(msg.body)}</div>
         </div>
