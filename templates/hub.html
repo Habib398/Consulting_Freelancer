@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="csrf-token" content="{{ csrf_token }}"/>
+  <title>Inicio · {{ me.full_name or me.username or 'Sistema' }}</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/radial_menu.css"/>
+
+  {# ── Variables CSS por brand ── #}
+  <style>
+    :root {
+      --rm-accent:      {{ '#D6AF45' if brand == 'petroleum' else '#86B821' }};
+      --rm-accent-dark: {{ '#c9a030' if brand == 'petroleum' else '#618B2E' }};
+      --rm-accent-soft: {{ 'rgba(214,175,69,.10)' if brand == 'petroleum' else 'rgba(134,184,33,.10)' }};
+      --rm-accent-line: {{ 'rgba(214,175,69,.30)' if brand == 'petroleum' else 'rgba(134,184,33,.30)' }};
+      {% if brand == 'petroleum' %}
+      --rm-text:        #F8FAFC;
+      --rm-text-soft:   rgba(248,250,252,.55);
+      --rm-surface:     rgba(255,255,255,.05);
+      --rm-border:      rgba(255,255,255,.10);
+      --rm-shadow:      0 18px 54px rgba(0,0,0,.32);
+      --rm-hub-shadow:  0 28px 80px rgba(0,0,0,.44);
+      {% endif %}
+    }
+  </style>
+</head>
+
+<body class="brand-{{ brand }}">
+
+  {# ── Topbar mínima ── #}
+  <header class="rm-topbar">
+    {# Botón Volver — esquina izquierda #}
+    <a href="/logout" class="rm-back-btn" aria-label="Cerrar sesión y volver al inicio">
+      <svg viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      Volver
+    </a>
+
+    {# Logo + nombre del sistema — centro #}
+    <div class="rm-topbar-brand">
+      {% if brand == 'petroleum' %}
+        <img class="rm-topbar-logo"
+          src="{{ ('/uploads/' ~ branding.logo_path) if branding and branding.logo_path else '/static/img/petroleum-logo.png' }}"
+          alt="Petroleum"/>
+      {% else %}
+        <img class="rm-topbar-logo"
+          src="{{ ('/uploads/' ~ branding.logo_path) if branding and branding.logo_path else '/static/img/logo.png' }}"
+          alt="Consulting"/>
+      {% endif %}
+      <div class="rm-topbar-title">
+        {{ branding.system_title if branding and branding.system_title else ('PETROLEUM · Sistema' if brand == 'petroleum' else 'CONSULTING · Sistema') }}
+        <span>/ Inicio</span>
+      </div>
+    </div>
+
+    {# Acciones — derecha #}
+    <div class="rm-topbar-actions">
+      <div class="rm-greeting" aria-live="polite">
+        Bienvenido, <strong>{{ me.full_name or me.username or 'Usuario' }}</strong>
+      </div>
+      <a href="/logout" class="rm-logout-btn" aria-label="Cerrar sesión">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Salir
+      </a>
+    </div>
+  </header>
+
+  {# ── Stage radial (desktop) ── #}
+  <div class="rm-stage" id="rmStage" role="navigation" aria-label="Menú principal">
+
+    {# Canvas SVG — los pétalos se dibujan aquí desde JS #}
+    <svg class="rm-svg" id="rmSvg" aria-hidden="true"></svg>
+
+    {# Hub central con logo #}
+    <div class="rm-hub" id="rmHub" aria-hidden="true">
+      {% if brand == 'petroleum' %}
+        <img class="rm-hub-logo"
+          src="{{ ('/uploads/' ~ branding.logo_path) if branding and branding.logo_path else '/static/img/petroleum-logo-full.png' }}"
+          alt="Petroleum"/>
+      {% else %}
+        <img class="rm-hub-logo"
+          src="{{ ('/uploads/' ~ branding.logo_path) if branding and branding.logo_path else '/static/img/consulting-logo-full.png' }}"
+          alt="Consulting Oil &amp; Gas"/>
+      {% endif %}
+    </div>
+
+    {# Contenedor de labels HTML sobre los pétalos #}
+    <div class="rm-labels" id="rmLabels"></div>
+
+  </div>
+
+  {# ── Lista mobile (< 640px) ── #}
+  <nav class="rm-mobile-list" id="rmMobile" aria-label="Menú principal"></nav>
+
+  {# ── Datos de nodos inyectados desde Python (evita llamada API) ── #}
+  <script type="application/json" id="rm-nodes">{{ nodes | tojson }}</script>
+
+  <script src="/static/js/radial_menu.js" defer></script>
+</body>
+</html>

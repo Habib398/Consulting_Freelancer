@@ -1,0 +1,614 @@
+/* ============================================================
+   radial_menu.css
+   Pantalla de bienvenida — Menú radial tipo pétalo.
+   Standalone (no usa layout.html).
+   Tokens base: Inter, --rm-accent, paleta HME / Petroleum.
+   ============================================================ */
+
+/* ── Reset mínimo ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--rm-text, #1F2937);
+  overflow: hidden;
+}
+
+/* ── Fondo — Consulting (default) ─────────────────────────── */
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background:
+    radial-gradient(920px 560px at 14% 0%,   rgba(134, 184, 33, .13), transparent 55%),
+    radial-gradient(800px 480px at 92% 8%,   rgba(214, 175, 69, .09), transparent 58%),
+    radial-gradient(600px 380px at 50% 100%, rgba(134, 184, 33, .06), transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #f7f9fb 55%, #ffffff 100%);
+}
+
+/* Marca de agua sutil */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: url("/static/img/logo-fondo.png") center / 500px no-repeat;
+  opacity: .04;
+  z-index: 0;
+}
+
+/* ── Variables locales (sobreescritas desde hub.html por brand) */
+:root {
+  --rm-accent:       #86B821;
+  --rm-accent-dark:  #618B2E;
+  --rm-accent-soft:  rgba(134, 184, 33, .10);
+  --rm-accent-line:  rgba(134, 184, 33, .30);
+  --rm-text:         #1F2937;
+  --rm-text-soft:    #6B7280;
+  --rm-surface:      rgba(255, 255, 255, .88);
+  --rm-border:       rgba(15, 23, 42, .09);
+  --rm-shadow:       0 18px 54px rgba(2, 6, 23, .09);
+  --rm-hub-shadow:   0 28px 80px rgba(2, 6, 23, .13);
+}
+
+/* ────────────────────────────────────────────────────────────
+   TOPBAR MÍNIMA
+   ────────────────────────────────────────────────────────── */
+.rm-topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  background: rgba(255, 255, 255, .76);
+  border-bottom: 1px solid var(--rm-border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.rm-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rm-topbar-logo {
+  height: 30px;
+  width: auto;
+  object-fit: contain;
+}
+.rm-topbar-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  color: var(--rm-text);
+  white-space: nowrap;
+}
+.rm-topbar-title span {
+  font-weight: 600;
+  color: var(--rm-text-soft);
+  margin-left: 4px;
+}
+
+.rm-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Botón Volver ───────────────────────────────────────────── */
+.rm-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--rm-border);
+  background: var(--rm-surface);
+  color: var(--rm-text-soft);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color .18s ease, color .18s ease, transform .18s ease;
+  white-space: nowrap;
+}
+.rm-back-btn:hover {
+  border-color: var(--rm-accent-line);
+  color: var(--rm-accent-dark);
+  transform: translateX(-2px);
+}
+.rm-back-btn svg {
+  width: 14px; height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex: 0 0 auto;
+}
+
+/* ── Saludo ─────────────────────────────────────────────────── */
+.rm-greeting {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rm-text-soft);
+  white-space: nowrap;
+}
+.rm-greeting strong {
+  color: var(--rm-accent-dark);
+  font-weight: 800;
+}
+
+/* ── Logout ─────────────────────────────────────────────────── */
+.rm-logout-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--rm-border);
+  background: transparent;
+  color: var(--rm-text-soft);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color .18s ease, color .18s ease;
+}
+.rm-logout-btn:hover {
+  border-color: rgba(239, 68, 68, .30);
+  color: #dc2626;
+}
+
+/* ────────────────────────────────────────────────────────────
+   STAGE — contenedor del radial
+   ────────────────────────────────────────────────────────── */
+.rm-stage {
+  position: relative;
+  z-index: 1;
+  /* Cuadrado: el menor entre 82vw y 82vh, máx 740px */
+  width:  min(80vw, 80vh, 740px);
+  height: min(80vw, 80vh, 740px);
+  flex: 0 0 auto;
+  margin-top: 60px; /* altura topbar */
+}
+
+/* ── SVG canvas ─────────────────────────────────────────────── */
+.rm-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* ────────────────────────────────────────────────────────────
+   PÉTALOS SVG
+   ────────────────────────────────────────────────────────── */
+.rm-petal {
+  fill: var(--rm-surface);
+  stroke: var(--rm-accent-line);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+  cursor: pointer;
+  filter: drop-shadow(0 6px 20px rgba(2, 6, 23, .07));
+  transition: fill .22s ease, stroke .22s ease, filter .22s ease;
+
+  /* Animación de entrada — se aplica una vez */
+  opacity: 0;
+  animation: rm-petal-enter .48s cubic-bezier(.34, 1.56, .64, 1) both;
+}
+.rm-petal:hover,
+.rm-petal.rm-petal--hovered {
+  fill: var(--rm-accent-soft);
+  stroke: var(--rm-accent);
+  filter: drop-shadow(0 10px 30px rgba(134, 184, 33, .20));
+}
+
+/* ────────────────────────────────────────────────────────────
+   HUB CENTRAL
+   ────────────────────────────────────────────────────────── */
+.rm-hub {
+  position: absolute;
+  left: 50%;
+  top:  50%;
+  transform: translate(-50%, -50%);
+
+  /* Tamaño base — JS lo sobreescribe en proporción al stage */
+  width:  148px;
+  height: 148px;
+  border-radius: 50%;
+
+  background: radial-gradient(
+    circle at 38% 34%,
+    rgba(255, 255, 255, .98),
+    rgba(255, 255, 255, .82) 58%,
+    rgba(134, 184, 33, .07)
+  );
+  border: 1px solid rgba(134, 184, 33, .26);
+  box-shadow:
+    var(--rm-hub-shadow),
+    0 0 0  8px rgba(134, 184, 33, .05),
+    0 0 0 18px rgba(134, 184, 33, .025);
+
+  display: grid;
+  place-items: center;
+  z-index: 10;
+
+  animation:
+    rm-hub-enter .55s cubic-bezier(.34, 1.56, .64, 1) both,
+    rm-breathe   4.8s ease-in-out .55s infinite;
+}
+
+/* Anillo rotatorio exterior */
+.rm-hub::before {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent   0%,
+    rgba(134, 184, 33, .48) 18%,
+    transparent  36%,
+    transparent  62%,
+    rgba(134, 184, 33, .30) 80%,
+    transparent 100%
+  );
+  opacity: .20;
+  animation: rm-ring-rotate 26s linear infinite;
+  pointer-events: none;
+}
+
+/* Borde interior sutil */
+.rm-hub::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(134, 184, 33, .14);
+  pointer-events: none;
+}
+
+.rm-hub-logo {
+  width:  70%;
+  height: 70%;
+  object-fit: contain;
+  display: block;
+  filter: drop-shadow(0 4px 10px rgba(2, 6, 23, .10));
+  transition: transform .30s ease;
+}
+.rm-hub:hover .rm-hub-logo {
+  transform: scale(1.045);
+}
+
+/* ────────────────────────────────────────────────────────────
+   LABELS (HTML sobre SVG)
+   ────────────────────────────────────────────────────────── */
+.rm-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.rm-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: all;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+
+  text-decoration: none;
+  color: var(--rm-text);
+  text-align: center;
+  width: 90px;
+
+  opacity: 0;
+  animation: rm-label-enter .42s cubic-bezier(.34, 1.56, .64, 1) both;
+  transition: color .22s ease, transform .22s ease;
+}
+.rm-label:hover,
+.rm-label.rm-label--hovered {
+  color: var(--rm-accent-dark);
+  transform: translate(-50%, -50%) scale(1.07);
+}
+
+.rm-label-icon {
+  width:  40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .82);
+  border: 1px solid var(--rm-accent-line);
+  display: grid;
+  place-items: center;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(2, 6, 23, .07);
+  flex: 0 0 auto;
+  transition: background .22s ease, border-color .22s ease, box-shadow .22s ease;
+}
+.rm-label:hover .rm-label-icon,
+.rm-label.rm-label--hovered .rm-label-icon {
+  background: var(--rm-accent-soft);
+  border-color: var(--rm-accent);
+  box-shadow: 0 6px 20px rgba(134, 184, 33, .22);
+}
+.rm-label-icon svg {
+  width: 18px; height: 18px;
+  stroke: var(--rm-accent-dark);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.rm-label-text {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  text-shadow: 0 1px 5px rgba(255, 255, 255, .85);
+}
+
+/* ────────────────────────────────────────────────────────────
+   ANIMACIONES
+   ────────────────────────────────────────────────────────── */
+@keyframes rm-hub-enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(.45);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes rm-breathe {
+  0%, 100% {
+    box-shadow:
+      var(--rm-hub-shadow),
+      0 0 0  8px rgba(134, 184, 33, .05),
+      0 0 0 18px rgba(134, 184, 33, .025);
+  }
+  50% {
+    box-shadow:
+      0 38px 100px rgba(2, 6, 23, .17),
+      0 0 0 12px rgba(134, 184, 33, .08),
+      0 0 0 26px rgba(134, 184, 33, .04);
+  }
+}
+
+@keyframes rm-ring-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes rm-petal-enter {
+  from { opacity: 0; transform: scale(.62); }
+  to   { opacity: 1; transform: scale(1);   }
+}
+
+@keyframes rm-label-enter {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(.60); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1);   }
+}
+
+/* ────────────────────────────────────────────────────────────
+   MOBILE — lista vertical
+   ────────────────────────────────────────────────────────── */
+.rm-mobile-list { display: none; }
+
+@media (max-width: 640px) {
+  body {
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 80px 16px 40px;
+  }
+
+  .rm-stage { display: none; }
+
+  .rm-greeting { font-size: 11px; }
+
+  .rm-mobile-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    z-index: 1;
+  }
+
+  .rm-mobile-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 15px 18px;
+    border-radius: 18px;
+    border: 1px solid var(--rm-border);
+    background: var(--rm-surface);
+    text-decoration: none;
+    color: var(--rm-text);
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    box-shadow: var(--rm-shadow);
+    transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+
+    opacity: 0;
+    animation: rm-petal-enter .38s cubic-bezier(.34, 1.56, .64, 1) both;
+  }
+  .rm-mobile-card:hover {
+    border-color: var(--rm-accent-line);
+    transform: translateY(-2px);
+    box-shadow: 0 24px 60px rgba(2, 6, 23, .12);
+  }
+
+  .rm-mobile-card-icon {
+    width: 44px; height: 44px;
+    border-radius: 13px;
+    background: var(--rm-accent-soft);
+    border: 1px solid var(--rm-accent-line);
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+  }
+  .rm-mobile-card-icon svg {
+    width: 20px; height: 20px;
+    stroke: var(--rm-accent-dark);
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .rm-mobile-card-label {
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    flex: 1;
+  }
+  .rm-mobile-card-arrow {
+    margin-left: auto;
+    opacity: .35;
+    flex: 0 0 auto;
+  }
+}
+
+/* ────────────────────────────────────────────────────────────
+   PETROLEUM BRAND OVERRIDES
+   Se activan por la clase body.brand-petroleum
+   ────────────────────────────────────────────────────────── */
+body.brand-petroleum {
+  background:
+    radial-gradient(980px 560px at 12% 0%,  rgba(214, 175, 69, .16), transparent 56%),
+    radial-gradient(860px 520px at 90% 10%, rgba(18,  63, 126, .28), transparent 58%),
+    linear-gradient(180deg, #040914 0%, #07111f 55%, #050b14 100%);
+  color: #F8FAFC;
+}
+body.brand-petroleum::after { opacity: .03; }
+
+body.brand-petroleum .rm-topbar {
+  background: rgba(4, 9, 20, .72);
+  border-color: rgba(255, 255, 255, .08);
+}
+body.brand-petroleum .rm-topbar-title { color: #F8FAFC; }
+body.brand-petroleum .rm-topbar-title span { color: rgba(248, 250, 252, .55); }
+
+body.brand-petroleum .rm-back-btn,
+body.brand-petroleum .rm-logout-btn {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(255, 255, 255, .12);
+  color: rgba(248, 250, 252, .65);
+}
+body.brand-petroleum .rm-back-btn:hover {
+  color: #D6AF45;
+  border-color: rgba(214, 175, 69, .40);
+}
+body.brand-petroleum .rm-logout-btn:hover {
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, .30);
+}
+
+body.brand-petroleum .rm-greeting { color: rgba(248, 250, 252, .50); }
+body.brand-petroleum .rm-greeting strong { color: #D6AF45; }
+
+/* Hub petroleum */
+body.brand-petroleum .rm-hub {
+  background: radial-gradient(
+    circle at 38% 34%,
+    rgba(6, 17, 33, .94),
+    rgba(8, 19, 38, .80) 58%,
+    rgba(214, 175, 69, .08)
+  );
+  border-color: rgba(214, 175, 69, .28);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, .44),
+    0 0 0  8px rgba(214, 175, 69, .05),
+    0 0 0 18px rgba(214, 175, 69, .025);
+  animation:
+    rm-hub-enter .55s cubic-bezier(.34, 1.56, .64, 1) both,
+    rm-breathe-petro 4.8s ease-in-out .55s infinite;
+}
+body.brand-petroleum .rm-hub::before {
+  background: conic-gradient(
+    from 0deg,
+    transparent   0%,
+    rgba(214, 175, 69, .55) 18%,
+    transparent  36%,
+    transparent  62%,
+    rgba(214, 175, 69, .35) 80%,
+    transparent 100%
+  );
+}
+body.brand-petroleum .rm-hub::after {
+  border-color: rgba(214, 175, 69, .16);
+}
+
+@keyframes rm-breathe-petro {
+  0%, 100% {
+    box-shadow:
+      0 28px 80px rgba(0, 0, 0, .44),
+      0 0 0  8px rgba(214, 175, 69, .05),
+      0 0 0 18px rgba(214, 175, 69, .025);
+  }
+  50% {
+    box-shadow:
+      0 38px 100px rgba(0, 0, 0, .56),
+      0 0 0 12px rgba(214, 175, 69, .09),
+      0 0 0 26px rgba(214, 175, 69, .04);
+  }
+}
+
+/* Pétalos petroleum */
+body.brand-petroleum .rm-petal {
+  fill: rgba(255, 255, 255, .04);
+  stroke: rgba(214, 175, 69, .24);
+  filter: drop-shadow(0 6px 20px rgba(0, 0, 0, .24));
+}
+body.brand-petroleum .rm-petal:hover,
+body.brand-petroleum .rm-petal.rm-petal--hovered {
+  fill: rgba(214, 175, 69, .10);
+  stroke: #D6AF45;
+  filter: drop-shadow(0 10px 30px rgba(214, 175, 69, .22));
+}
+
+/* Labels petroleum */
+body.brand-petroleum .rm-label { color: #E2E8F0; }
+body.brand-petroleum .rm-label:hover,
+body.brand-petroleum .rm-label.rm-label--hovered { color: #D6AF45; }
+body.brand-petroleum .rm-label-icon {
+  background: rgba(255, 255, 255, .06);
+  border-color: rgba(214, 175, 69, .26);
+}
+body.brand-petroleum .rm-label:hover .rm-label-icon,
+body.brand-petroleum .rm-label.rm-label--hovered .rm-label-icon {
+  background: rgba(214, 175, 69, .12);
+  border-color: #D6AF45;
+  box-shadow: 0 6px 20px rgba(214, 175, 69, .24);
+}
+body.brand-petroleum .rm-label-icon svg { stroke: #D6AF45; }
+body.brand-petroleum .rm-label-text { text-shadow: 0 1px 5px rgba(0, 0, 0, .65); }
+
+/* Mobile petroleum */
+body.brand-petroleum .rm-mobile-card {
+  background: rgba(255, 255, 255, .05);
+  border-color: rgba(255, 255, 255, .10);
+  color: #F8FAFC;
+}
+body.brand-petroleum .rm-mobile-card:hover {
+  border-color: rgba(214, 175, 69, .40);
+}
+body.brand-petroleum .rm-mobile-card-icon {
+  background: rgba(214, 175, 69, .10);
+  border-color: rgba(214, 175, 69, .28);
+}
+body.brand-petroleum .rm-mobile-card-icon svg { stroke: #D6AF45; }

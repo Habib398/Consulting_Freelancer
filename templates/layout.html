@@ -68,6 +68,9 @@
           <a href="/mod/notifications">Notificaciones <span id="notifBadge" class="badge" style="display:none;margin-left:6px;">0</span></a>
           <a href="/mod/profile">Perfil / FIEL</a>
           <a href="/mod/organigrama">Organigrama</a>
+          {% if session.get('role') in ('admin', 'jefe_estacion') %}
+          <a href="/mod/chat">💬 Chat <span id="chatNavBadge" class="badge" style="display:none;margin-left:6px;background:#16a34a;color:#fff;">0</span></a>
+          {% endif %}
         </nav>
         <div class="navdetails">
           <details {% if active_section in ('operacion', None) %}open{% endif %}>

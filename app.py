@@ -52,6 +52,7 @@ import modules.stations as mod_stations
 import modules.operations as mod_operations
 import modules.compliance as mod_compliance
 import modules.admin as mod_admin
+import modules.messaging as mod_messaging
 
 
 def _setup_logging(app: Flask, base_dir: Path) -> None:
@@ -117,6 +118,24 @@ def create_app() -> Flask:
         REMEMBER_COOKIE_HTTPONLY=True,
         REMEMBER_COOKIE_SECURE=os.environ.get("COG_SESSION_SECURE", "0") == "1",
     )
+
+    # Inicializar Socket.IO opcionalmente (se activa con run_socketio.py).
+    # Si flask-socketio no esta instalado, la app arranca normal con Waitress
+    # y el chat cae en modo polling HTTP automaticamente.
+    try:
+        from flask_socketio import SocketIO
+        _ws_origins = os.environ.get("COG_WS_ORIGINS", "same-origin")
+        _socketio = SocketIO(
+            app,
+            async_mode="gevent",
+            cors_allowed_origins=_ws_origins,
+            manage_session=False,   # Flask gestiona la sesion
+            logger=False,
+            engineio_logger=False,
+        )
+        app.extensions["socketio"] = _socketio
+    except ImportError:
+        app.extensions["socketio"] = None
     # Global upper bound for uploads (per-endpoint limits are enforced in code).
     # - Default uploads: 20MB
     # - Annual evidence / annual uploads: higher (default 120MB)
@@ -253,7 +272,7 @@ def create_app() -> Flask:
             "object-src 'none'; "
             "frame-ancestors 'self'; "
             "img-src 'self' data: blob: https://*.tile.openstreetmap.org; "
-            "connect-src 'self' https://unpkg.com; "
+            "connect-src 'self' https://unpkg.com ws://localhost:* wss://localhost:* ws: wss:; "
             "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://unpkg.com; "
             "style-src-elem 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com https://unpkg.com; "
             "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
@@ -384,6 +403,7 @@ def create_app() -> Flask:
     mod_operations.register(app)  # Actividades, pipas, mantenimiento, alertas, pagos
     mod_compliance.register(app)  # Documentos, normativas, CAPA y auditoría
     mod_admin.register(app)       # Admin, reportes, analítica y organigrama
+    mod_messaging.register(app)   # Chat segmentado (operativo e interno)
 
     # Inyecta CSRF token + branding + sección activa en todos los templates
     @app.context_processor

@@ -1,0 +1,64 @@
+﻿{% extends "layout.html" %}
+{% block head %}
+<link rel="stylesheet" href="/static/css/chat.css"/>
+{% endblock %}
+
+{% block content %}
+<div class="chat-layout">
+
+  <!-- Panel izquierdo: lista de salas -->
+  <aside class="chat-sidebar">
+    <div class="chat-sidebar-header">
+      <span class="chat-sidebar-title">💬 Chat</span>
+    </div>
+    <div class="chat-rooms-list" id="roomsList">
+      <div class="chat-loading">Cargando salas…</div>
+    </div>
+  </aside>
+
+  <!-- Panel derecho: mensajes -->
+  <section class="chat-main" id="chatMain">
+    <div class="chat-empty-state" id="chatEmptyState">
+      <div class="chat-empty-icon">💬</div>
+      <div class="chat-empty-text">Selecciona una conversación para comenzar</div>
+    </div>
+
+    <!-- Cabecera de la sala activa -->
+    <div class="chat-header" id="chatHeader" hidden>
+      <div class="chat-header-name" id="chatHeaderName"></div>
+      <div class="chat-header-sub" id="chatHeaderSub"></div>
+    </div>
+
+    <!-- Área de mensajes -->
+    <div class="chat-messages-wrap" id="chatMessagesWrap" hidden>
+      <div class="chat-messages" id="chatMessages"></div>
+    </div>
+
+    <!-- Input de mensaje -->
+    <form class="chat-input-bar" id="chatInputBar" hidden autocomplete="off">
+      <textarea
+        id="chatInput"
+        class="chat-input"
+        placeholder="Escribe un mensaje…"
+        rows="1"
+        maxlength="4000"
+      ></textarea>
+      <button type="submit" class="btn chat-send-btn" id="chatSendBtn">
+        <span>Enviar</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </form>
+  </section>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Socket.IO client (same version as server) -->
+<script src="https://cdn.jsdelivr.net/npm/socket.io@4.7.5/client-dist/socket.io.min.js"></script>
+<script>
+  window.CHAT_USER_ID = {{ session.get('user_id') | tojson }};
+  window.CSRF_TOKEN   = {{ csrf_token | tojson }};
+</script>
+<script src="/static/js/chat.js"></script>
+{% endblock %}

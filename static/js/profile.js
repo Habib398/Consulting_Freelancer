@@ -172,7 +172,103 @@
     });
   }
 
+
+  /* Firma personal - canvas modal */
+  const overlay   = qs('#sigModalOverlay');
+  const canvas    = qs('#sigCanvas');
+  const btnOpen   = qs('#btnOpenSigModal');
+  const btnClear  = qs('#btnSigClear');
+  const btnSave   = qs('#btnSigSave');
+  const btnCancel = qs('#btnSigCancel');
+  const sigMsg    = qs('#sigModalMsg');
+  const sigPreview= qs('#sigPreviewWrap');
+  const sigImg    = qs('#sigPreviewImg');
+
+  let sigCtx = null, sigDrawing = false, sigHasStroke = false;
+
+  function initCanvas(){
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width  = rect.width  * dpr;
+    canvas.height = rect.height * dpr;
+    sigCtx = canvas.getContext('2d');
+    sigCtx.scale(dpr, dpr);
+    sigCtx.lineWidth   = 2.6;
+    sigCtx.lineCap     = 'round';
+    sigCtx.lineJoin    = 'round';
+    sigCtx.strokeStyle = '#111827';
+    sigCtx.fillStyle   = '#ffffff';
+    sigCtx.fillRect(0, 0, rect.width, rect.height);
+  }
+
+  function sigPoint(e){
+    const r = canvas.getBoundingClientRect();
+    const src = e.touches && e.touches[0] ? e.touches[0] : e;
+    return { x: src.clientX - r.left, y: src.clientY - r.top };
+  }
+
+  function sigStart(e){ sigDrawing=true; const p=sigPoint(e); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y); e.preventDefault(); }
+  function sigMove(e){ if(!sigDrawing) return; const p=sigPoint(e); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); sigHasStroke=true; e.preventDefault(); }
+  function sigEnd(){ sigDrawing=false; }
+
+  if (canvas){
+    ['mousedown','touchstart'].forEach(ev=>canvas.addEventListener(ev,sigStart,{passive:false}));
+    ['mousemove','touchmove'] .forEach(ev=>canvas.addEventListener(ev,sigMove, {passive:false}));
+    ['mouseup','mouseleave','touchend'].forEach(ev=>canvas.addEventListener(ev,sigEnd));
+  }
+
+  async function loadSignature(){
+    try{
+      const r = await api('/api/profile/signature');
+      if (r.signature_url && sigImg && sigPreview){
+        sigImg.src = r.signature_url + '?t=' + Date.now();
+        sigPreview.hidden = false;
+        if (btnOpen) btnOpen.textContent = 'Actualizar firma';
+      }
+    }catch(_){}
+  }
+
+  function openSigModal(){
+    if (!overlay||!canvas) return;
+    sigHasStroke=false;
+    if (sigMsg) sigMsg.textContent='';
+    overlay.classList.add('open');
+    requestAnimationFrame(()=>{ initCanvas(); });
+  }
+  function closeSigModal(){ if(overlay) overlay.classList.remove('open'); }
+
+  if (btnOpen)   btnOpen.addEventListener('click', openSigModal);
+  if (btnCancel) btnCancel.addEventListener('click', closeSigModal);
+  if (overlay)   overlay.addEventListener('click', e=>{ if(e.target===overlay) closeSigModal(); });
+
+  if (btnClear) btnClear.addEventListener('click', ()=>{
+    if (!sigCtx||!canvas) return;
+    const r=canvas.getBoundingClientRect();
+    sigCtx.fillStyle='#ffffff'; sigCtx.fillRect(0,0,r.width,r.height);
+    sigHasStroke=false; if(sigMsg) sigMsg.textContent='';
+  });
+
+  if (btnSave) btnSave.addEventListener('click', async ()=>{
+    if (!sigHasStroke){
+      if(sigMsg){sigMsg.style.color='var(--hme-danger,#dc2626)'; sigMsg.textContent='Dibuja tu firma primero.';}
+      return;
+    }
+    if(sigMsg){sigMsg.style.color=''; sigMsg.textContent='Guardando...';}
+    btnSave.disabled=true;
+    try{
+      const dataUrl=canvas.toDataURL('image/png');
+      const r=await api('/api/profile/signature',{method:'POST',body:JSON.stringify({image_data:dataUrl})});
+      if(sigImg&&sigPreview){ sigImg.src=r.signature_url+'?t='+Date.now(); sigPreview.hidden=false; }
+      if(btnOpen) btnOpen.textContent='Actualizar firma';
+      if(sigMsg){sigMsg.style.color='var(--hme-success,#16a34a)'; sigMsg.textContent='Firma guardada correctamente.';}
+      setTimeout(closeSigModal,1200);
+    }catch(e){
+      if(sigMsg){sigMsg.style.color='var(--hme-danger,#dc2626)'; sigMsg.textContent='Error: '+e.message;}
+    }finally{ btnSave.disabled=false; }
+  });
   fillAccountCard();
   await load();
+  await loadSignature();
 })();
 

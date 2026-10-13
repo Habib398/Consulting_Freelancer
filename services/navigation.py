@@ -30,6 +30,7 @@ _SECTION_MAP: dict[str, str] = {
     "/mod/help-center":                  "ayuda",
     "/mod/signature-pad":               "ayuda",
     "/mod/analytics":                    "ayuda",
+    "/mod/chat":                         "comunicacion",
 }
 
 

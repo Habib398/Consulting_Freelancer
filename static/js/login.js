@@ -38,9 +38,9 @@ async function doLogin(){
     // Always consulting — no brand selector needed
     try{
       const brandRes = await api("/api/set-brand",{method:"POST",body:JSON.stringify({brand:"consulting"})});
-      location.href = brandRes.redirect || "/admin/menu";
+      location.href = brandRes.redirect || "/hub";
     }catch(_e){
-      location.href = "/admin/menu";
+      location.href = "/hub";
     }
   }catch(e){
     err.textContent = "No se pudo iniciar sesión: " + e.message;

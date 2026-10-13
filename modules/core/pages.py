@@ -864,6 +864,68 @@ def register(app):
             max_age=0,
         )
 
+    # ── Menú radial de bienvenida (todos los roles) ─────────────────────────
+    def _hub_nodes_for_role(role: str) -> list:
+        """Devuelve la lista de nodos del menú radial según el rol del usuario."""
+        role = (role or "").strip().lower()
+        if role == "admin":
+            return [
+                {"label": "SASISOPA",       "href": "/admin/sasisopa",           "icon": "shield"},
+                {"label": "SGM",            "href": "/admin/sgm",                "icon": "file-text"},
+                {"label": "Estaciones",     "href": "/admin/stations",           "icon": "building"},
+                {"label": "Inbox",          "href": "/admin/inbox",              "icon": "inbox"},
+                {"label": "Cal. Operativo", "href": "/mod/operational-calendar", "icon": "calendar"},
+                {"label": "Dashboard",      "href": "/mod/dashboard",            "icon": "bar-chart"},
+                {"label": "Notificaciones", "href": "/mod/notifications",        "icon": "bell"},
+                {"label": "Centro módulos", "href": "/admin/menu",               "icon": "grid"},
+            ]
+        if role == "jefe_estacion":
+            return [
+                {"label": "Cal. Operativo", "href": "/mod/operational-calendar",    "icon": "calendar"},
+                {"label": "SASISOPA",       "href": "/staff/sasisopa/docs/records", "icon": "shield"},
+                {"label": "SGM",            "href": "/staff/sgm/docs/records",      "icon": "file-text"},
+                {"label": "Evidencias",     "href": "/mod/station-evidence",        "icon": "eye"},
+                {"label": "Dashboard",      "href": "/mod/dashboard",               "icon": "bar-chart"},
+                {"label": "Notificaciones", "href": "/mod/notifications",           "icon": "bell"},
+            ]
+        if role == "operador":
+            return [
+                {"label": "Actividades",    "href": "/mod/activities",              "icon": "calendar"},
+                {"label": "SASISOPA",       "href": "/staff/sasisopa/docs/records", "icon": "shield"},
+                {"label": "SGM",            "href": "/staff/sgm/docs/records",      "icon": "file-text"},
+                {"label": "Dashboard",      "href": "/mod/dashboard",               "icon": "bar-chart"},
+                {"label": "Notificaciones", "href": "/mod/notifications",           "icon": "bell"},
+            ]
+        if role in ("contador", "auditor"):
+            return [
+                {"label": "SASISOPA",       "href": "/staff/sasisopa/docs/records", "icon": "shield"},
+                {"label": "SGM",            "href": "/staff/sgm/docs/records",      "icon": "file-text"},
+                {"label": "Pagos",          "href": "/mod/payments",                "icon": "credit-card"},
+                {"label": "Docs faltantes", "href": "/staff/pending-docs",          "icon": "alert-circle"},
+                {"label": "Dashboard",      "href": "/mod/dashboard",               "icon": "bar-chart"},
+                {"label": "Notificaciones", "href": "/mod/notifications",           "icon": "bell"},
+            ]
+        # Fallback para roles no mapeados
+        return [
+            {"label": "Dashboard",      "href": "/mod/dashboard",    "icon": "bar-chart"},
+            {"label": "Notificaciones", "href": "/mod/notifications", "icon": "bell"},
+        ]
+
+    @app.get("/hub")
+    @login_required
+    def hub_menu():
+        """Pantalla de bienvenida con menú radial. Aplica a todos los roles."""
+        from services.brand import get_brand
+        from services.branding import get_branding_settings
+        me    = ctx.get_me() or {}
+        brand = get_brand()
+        try:
+            branding = get_branding_settings(brand)
+        except Exception:
+            branding = {}
+        nodes = _hub_nodes_for_role(me.get("role"))
+        return render_template("hub.html", me=me, brand=brand, branding=branding, nodes=nodes)
+
     @app.get("/admin/menu")
     @login_required
     @role_required("admin")
@@ -885,13 +947,8 @@ def register(app):
 
         set_brand("consulting")
 
-        if role == "admin":
-            return redirect("/admin/menu")
-        if role == "operador":
-            return redirect("/mod/activities")
-        if role == "jefe_estacion":
-            return redirect("/mod/station-evidence")
-        return redirect("/staff/menu")
+        # Todos los roles aterrizan en el menú radial de bienvenida
+        return redirect("/hub")
 
 
 
@@ -910,25 +967,15 @@ def register(app):
 
         if role == "admin":
             set_brand(brand)
-            redirect_url = "/admin/menu"
-            return jsonify({"ok": True, "brand": brand, "redirect": redirect_url})
+            return jsonify({"ok": True, "brand": brand, "redirect": "/hub"})
 
         allowed = parse_allowed_brands(me.get("allowed_brands"))
         if brand not in allowed:
             return jsonify({"ok": False, "error": "brand_not_allowed"}), 403
 
         set_brand(brand)
-        # Redirigir según rol operativo:
-        # - operador        → vista de actividades
-        # - jefe_estacion   → calendario operativo
-        # - contador/auditor y demás → menú staff general
-        if role == "operador":
-            redirect_url = "/mod/activities"
-        elif role == "jefe_estacion":
-            redirect_url = "/mod/station-evidence"
-        else:
-            redirect_url = "/staff/menu"
-        return jsonify({"ok": True, "brand": brand, "redirect": redirect_url})
+        # Todos los roles aterrizan en el menú radial de bienvenida
+        return jsonify({"ok": True, "brand": brand, "redirect": "/hub"})
 
 
 

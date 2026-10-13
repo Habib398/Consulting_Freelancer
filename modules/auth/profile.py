@@ -1,9 +1,11 @@
 from __future__ import annotations
-import json, datetime
+import base64, json, datetime
+from pathlib import Path
 from flask import request, jsonify, session, redirect, render_template, send_from_directory, abort, current_app
 from werkzeug.security import generate_password_hash
 from db import get_conn, verify_user, get_user
 from services.brand import get_brand
+from services.storage import get_storage
 
 
 def register(app):
@@ -168,5 +170,58 @@ def register(app):
         conn.close()
         return jsonify({"daily": daily, "monthly": monthly, "yearly": yearly, "last_30_days": series})
 
+    # ---------------- user personal signature ----------------
+
+    @app.get("/api/profile/signature")
+    @login_required
+    def api_profile_signature_get():
+        """Devuelve la URL de la firma personal del usuario logueado."""
+        me = ctx.get_me()
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute("SELECT signature_path FROM users WHERE id=?", (me["id"],))
+        row = cur.fetchone()
+        conn.close()
+        sig_path = row["signature_path"] if row else None
+        return jsonify({
+            "ok": True,
+            "signature_path": sig_path,
+            "signature_url": f"/uploads/{sig_path}" if sig_path else None,
+        })
+
+    @app.post("/api/profile/signature")
+    @login_required
+    def api_profile_signature_save():
+        """Guarda la firma dibujada (base64 PNG) como firma personal del usuario."""
+        me = ctx.get_me()
+        payload = request.get_json(silent=True) or {}
+        image_data = (payload.get("image_data") or "").strip()
+
+        if not image_data.startswith("data:image/png;base64,"):
+            return jsonify({"ok": False, "error": "invalid_image_data"}), 400
+
+        try:
+            raw = base64.b64decode(image_data.split(",", 1)[1])
+        except Exception:
+            return jsonify({"ok": False, "error": "invalid_image_data"}), 400
+
+        if len(raw) < 100:
+            return jsonify({"ok": False, "error": "empty_signature"}), 400
+
+        brand = get_brand()
+        ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
+        subdir = Path(brand) / "user_signatures"
+        fname = f"{me['id']}_{ts}.png"
+        rel = str(subdir / fname).replace("\\", "/")
+
+        get_storage().save_bytes(raw, rel, content_type="image/png")
+
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute("UPDATE users SET signature_path=? WHERE id=?", (rel, me["id"]))
+        conn.commit(); conn.close()
+
+        ctx.log_action(me, "update_personal_signature", "users", str(me["id"]), {})
+        return jsonify({"ok": True, "signature_url": f"/uploads/{rel}"})
+
     # ---------------- notifications ----------------
+
 

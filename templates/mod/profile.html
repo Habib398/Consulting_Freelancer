@@ -51,6 +51,41 @@
     font-weight:900; font-size:14.5px; margin-bottom:14px;
     padding-bottom:10px; border-bottom:1px solid var(--hme-border,rgba(15,23,42,.09));
   }
+
+  /* ── Firma personal ─────────────────────────────────────────────── */
+  .sig-preview-wrap{
+    margin-top:14px; padding:10px 12px; border-radius:10px;
+    border:1px dashed var(--hme-border,rgba(15,23,42,.18));
+    background:var(--hme-bg-soft,#f8fafc);
+    display:flex; align-items:center; gap:12px;
+  }
+  .sig-preview-wrap img{
+    max-height:60px; max-width:200px; object-fit:contain;
+    border-radius:6px; background:#fff;
+    border:1px solid var(--hme-border,rgba(15,23,42,.09));
+  }
+  .sig-preview-label{ font-size:12px; color:var(--hme-text-soft,#64748b); font-weight:700; }
+
+  /* ── Modal firma ────────────────────────────────────────────────── */
+  .sig-modal-overlay{
+    display:none; position:fixed; inset:0; z-index:9999;
+    background:rgba(15,23,42,.45); backdrop-filter:blur(3px);
+    align-items:center; justify-content:center;
+  }
+  .sig-modal-overlay.open{ display:flex; }
+  .sig-modal{
+    background:var(--hme-bg,#fff); border-radius:18px;
+    padding:24px; width:min(600px,94vw);
+    box-shadow:0 20px 60px rgba(15,23,42,.22);
+  }
+  .sig-modal-title{ font-weight:900; font-size:16px; margin-bottom:16px; }
+  .sig-canvas{
+    width:100%; height:220px; display:block;
+    border:1.5px dashed var(--hme-border,rgba(15,23,42,.2));
+    border-radius:12px; background:#fff; cursor:crosshair; touch-action:none;
+  }
+  .sig-modal-actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+  .sig-modal-msg{ font-size:12.5px; font-weight:700; margin-left:auto; }
 </style>
 {% endblock %}
 {% block content %}
@@ -88,9 +123,38 @@
         </div>
       </div>
       <div id="fielDownloads" style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;"></div>
+
+      {# ── Firma personal ──────────────────────────────────────────── #}
+      <div style="border-top:1px solid var(--hme-border,rgba(15,23,42,.09));margin-top:14px;padding-top:14px;">
+        <div style="font-weight:800;font-size:13px;margin-bottom:10px;">Firma personal</div>
+        <div id="sigPreviewWrap" class="sig-preview-wrap" hidden>
+          <img id="sigPreviewImg" src="" alt="Firma guardada">
+          <div>
+            <div class="sig-preview-label">Firma guardada</div>
+            <div class="help" style="margin-top:2px;font-size:11.5px;">Se usará al agregar tu firma a documentos.</div>
+          </div>
+        </div>
+        <div style="margin-top:12px;">
+          <button class="btn" id="btnOpenSigModal" type="button">✍️ Generar firma</button>
+        </div>
+      </div>
     </div>
   </div>
 
+</div>
+
+{# ── Modal: Lienzo de firma ──────────────────────────────────────── #}
+<div class="sig-modal-overlay" id="sigModalOverlay">
+  <div class="sig-modal">
+    <div class="sig-modal-title">Dibuja tu firma</div>
+    <canvas id="sigCanvas" class="sig-canvas"></canvas>
+    <div class="sig-modal-actions">
+      <button class="btn ghost" id="btnSigClear" type="button">Limpiar</button>
+      <button class="btn primary" id="btnSigSave" type="button">Guardar firma</button>
+      <button class="btn" id="btnSigCancel" type="button" style="margin-left:auto;">Cancelar</button>
+      <span id="sigModalMsg" class="sig-modal-msg"></span>
+    </div>
+  </div>
 </div>
 
 {# ── Sección: Datos fiscales de la estación ─────────────────────── #}

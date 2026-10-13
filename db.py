@@ -720,6 +720,86 @@ def _apply_versioned_migrations(conn):
         conn.commit()
         _mark_migration(conn, mid, "Classroom: remap approved/reviewed -> submitted")
 
+    # M12: Firma personal de usuario — agrega columna signature_path a users
+    mid = "2026-09-29_01_user_personal_signature"
+    if not _migration_applied(conn, mid):
+        try:
+            ensure_column(conn, "users", "signature_path", "signature_path TEXT")
+        except Exception:
+            pass
+        _mark_migration(conn, mid, "User personal signature path")
+
+    # M13: Sistema de chat segmentado
+    # chat_rooms: una sala por estación (operative) + una sala interna para admins (internal)
+    # chat_messages: mensajes con remitente, sala y timestamp
+    mid = "2026-10-07_01_chat_rooms_messages"
+    if not _migration_applied(conn, mid):
+        _safe_executescript(conn, '''
+        CREATE TABLE IF NOT EXISTS chat_rooms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand TEXT NOT NULL DEFAULT 'consulting',
+            kind TEXT NOT NULL DEFAULT 'operative' CHECK(kind IN ('operative','internal')),
+            station_id INTEGER,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(station_id) REFERENCES stations(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            brand TEXT NOT NULL DEFAULT 'consulting',
+            room_id INTEGER NOT NULL,
+            sender_user_id INTEGER NOT NULL,
+            body TEXT NOT NULL,
+            is_read INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+            FOREIGN KEY(sender_user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_room_created
+            ON chat_messages(room_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_chat_messages_unread
+            ON chat_messages(room_id, is_read, created_at);
+        CREATE INDEX IF NOT EXISTS idx_chat_rooms_brand_kind
+            ON chat_rooms(brand, kind, station_id);
+        ''')
+        # Crear sala interna para admins si no existe aún
+        try:
+            exists = conn.execute(
+                "SELECT 1 FROM chat_rooms WHERE brand='consulting' AND kind='internal' LIMIT 1"
+            ).fetchone()
+            if not exists:
+                conn.execute(
+                    "INSERT INTO chat_rooms (brand, kind, station_id, name) VALUES (?,?,NULL,?)",
+                    ('consulting', 'internal', 'Chat Interno — Administradores'),
+                )
+                conn.commit()
+        except Exception:
+            pass
+        # Crear salas operativas para estaciones existentes que no tengan una
+        try:
+            stations = conn.execute(
+                "SELECT id, name, brand FROM stations ORDER BY id"
+            ).fetchall()
+            for st in stations:
+                sid = st['id'] if isinstance(st, dict) else st[0]
+                sname = st['name'] if isinstance(st, dict) else st[1]
+                sbrand = st['brand'] if isinstance(st, dict) else st[2]
+                already = conn.execute(
+                    "SELECT 1 FROM chat_rooms WHERE brand=? AND kind='operative' AND station_id=? LIMIT 1",
+                    (sbrand, sid),
+                ).fetchone()
+                if not already:
+                    conn.execute(
+                        "INSERT INTO chat_rooms (brand, kind, station_id, name) VALUES (?,?,?,?)",
+                        (sbrand, 'operative', sid, f'Estación: {sname}'),
+                    )
+            conn.commit()
+        except Exception:
+            pass
+        _mark_migration(conn, mid, "Chat rooms + messages tables")
+
 
 def init_db():
     os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
