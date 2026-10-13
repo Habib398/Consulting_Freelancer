@@ -937,18 +937,37 @@ def register(app):
     @role_required("admin","auditor","contador","jefe_estacion","operador")
     def select_system():
         """
-        Selector de empresa — ahora es consulting-only.
-        Auto-selecciona consulting y redirige segun rol.
+        Selector de empresa (brand). Si el usuario solo tiene un brand
+        permitido se auto-selecciona y redirige a /hub. Si tiene más de uno
+        se muestra el template de selección de sistema.
         """
-        from services.brand import set_brand
+        from services.brand import set_brand, parse_allowed_brands
 
         me = ctx.get_me() or {}
         role = (me.get("role") or "").strip().lower()
 
-        set_brand("consulting")
+        # Admins tienen acceso a ambos brands — mostrar selector siempre
+        if role == "admin":
+            return render_template(
+                "select_system.html",
+                me=me,
+                brands=["consulting", "petroleum"],
+            )
 
-        # Todos los roles aterrizan en el menú radial de bienvenida
-        return redirect("/hub")
+        allowed = parse_allowed_brands(me.get("allowed_brands"))
+        if not allowed:
+            allowed = ["consulting"]
+
+        if len(allowed) == 1:
+            # Solo un brand → auto-seleccionar y redirigir
+            set_brand(allowed[0])
+            return redirect("/hub")
+
+        return render_template(
+            "select_system.html",
+            me=me,
+            brands=allowed,
+        )
 
 
 

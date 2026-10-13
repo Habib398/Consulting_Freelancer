@@ -243,7 +243,7 @@
       qs("#uEmail").value = u.email || "";
       qs("#uRole").value = u.role;
       qs("#uStation").value = u.station_id || "";
-      qs("#uBrands").value = u.allowed_brands || "consulting,petroleum";
+      qs("#uBrands").value = u.allowed_brands || "consulting";
       
       openModal(false);
       return;

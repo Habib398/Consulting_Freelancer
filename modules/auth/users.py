@@ -3,9 +3,17 @@ import json, datetime, re, sqlite3
 from flask import request, jsonify, session, redirect, render_template, send_from_directory, abort, current_app
 from werkzeug.security import generate_password_hash
 from db import get_conn, verify_user, get_user
-from services.brand import get_brand
+from services.brand import get_brand, parse_allowed_brands, VALID_BRANDS
 
 EMAIL_RX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _normalize_allowed_brands(raw, fallback: str) -> str:
+    """Convierte lista/CSV de brands a CSV válido y ordenado (ej. 'consulting,petroleum')."""
+    if isinstance(raw, (list, tuple, set)):
+        raw = ",".join(str(x) for x in raw)
+    allowed = parse_allowed_brands((raw or "").strip() or fallback)
+    return ",".join(b for b in VALID_BRANDS if b in allowed)
 
 
 def _normalize_station_id(raw):
@@ -50,11 +58,6 @@ def register(app):
         role = (data.get("role") or "").strip()
         station_id = _normalize_station_id(data.get("station_id"))
         email = (data.get("email") or "").strip().lower()
-        raw_allowed_brands = data.get("allowed_brands")
-        if isinstance(raw_allowed_brands, (list, tuple, set)):
-            allowed_brands = ",".join(str(x).strip().lower() for x in raw_allowed_brands if str(x).strip())
-        else:
-            allowed_brands = (raw_allowed_brands or "").strip().lower()
         if role not in ("admin","operador","jefe_estacion","contador","auditor"):
             return jsonify({"error":"invalid_role"}), 400
         if not username or not password:
@@ -64,14 +67,10 @@ def register(app):
         if email and not EMAIL_RX.match(email):
             return jsonify({"error":"invalid_email"}), 400
         brand = get_brand()
-        if not allowed_brands:
-            allowed_brands = brand
-        # normalize allowed_brands
-        allowed = [p.strip() for p in allowed_brands.split(",") if p.strip()]
-        allowed = [p for p in allowed if p == "consulting"]
-        if not allowed:
-            allowed = ["consulting"]
-        allowed_brands = "consulting"
+        # Sin valor explícito → solo el brand activo
+        allowed_brands = _normalize_allowed_brands(data.get("allowed_brands"), brand)
+        allowed = allowed_brands.split(",")
+        primary_brand = brand if brand in allowed else allowed[0]
 
         if role in {"operador","jefe_estacion"} and not station_id:
             return jsonify({"error":"station_required"}), 400
@@ -82,7 +81,7 @@ def register(app):
         try:
             cur.execute(
                 "INSERT INTO users (username, password_hash, role, station_id, email, allowed_brands, primary_brand) VALUES (?,?,?,?,?,?,?)",
-                (username, generate_password_hash(password), role, station_id if role in {"operador","jefe_estacion"} else station_id, email or None, allowed_brands, brand),
+                (username, generate_password_hash(password), role, station_id if role in {"operador","jefe_estacion"} else station_id, email or None, allowed_brands, primary_brand),
             )
             uid = cur.lastrowid
             conn.commit()
@@ -107,7 +106,7 @@ def register(app):
     def api_user_update(user_id):
         data = request.get_json(silent=True) or {}
         conn=get_conn(); cur=conn.cursor()
-        cur.execute("SELECT id, role, station_id FROM users WHERE id=?", (user_id,))
+        cur.execute("SELECT id, role, station_id, primary_brand FROM users WHERE id=?", (user_id,))
         current = cur.fetchone()
         if not current:
             conn.close()
@@ -142,6 +141,13 @@ def register(app):
                 sets.append(f"{f}=?"); vals.append(data[f])
         if "station_id" in data or "role" in data:
             sets.append("station_id=?"); vals.append(station_id if new_role in {"operador","jefe_estacion","contador","auditor"} else None)
+        if "allowed_brands" in data:
+            allowed_brands = _normalize_allowed_brands(data.get("allowed_brands"), brand)
+            allowed = allowed_brands.split(",")
+            sets.append("allowed_brands=?"); vals.append(allowed_brands)
+            # Si el brand principal ya no está permitido, mover al primero permitido
+            if current.get("primary_brand") not in allowed:
+                sets.append("primary_brand=?"); vals.append(allowed[0])
         if not sets:
             conn.close()
             return jsonify({"error":"no_changes"}), 400

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="csrf-token" content="{{ csrf_token }}"/>
+  <title>Seleccionar sistema</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/login.css"/>
+  <style>
+    .sys-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-top:1.6rem;}
+    .sys-card{border:2px solid #e5e7eb;border-radius:16px;padding:2rem 1.5rem;cursor:pointer;transition:border-color .15s,box-shadow .15s,transform .15s;text-align:center;background:#fff;text-decoration:none;display:flex;flex-direction:column;align-items:center;gap:.75rem;}
+    .sys-card:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.10);}
+    .sys-card.consulting:hover{border-color:#86B821;}
+    .sys-card.petroleum:hover{border-color:#D6AF45;}
+    .sys-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;margin-bottom:.4rem;}
+    .sys-card.consulting .sys-icon{background:rgba(134,184,33,.12);}
+    .sys-card.petroleum .sys-icon{background:rgba(214,175,69,.12);}
+    .sys-name{font-weight:700;font-size:1.05rem;color:#111;}
+    .sys-sub{font-size:.82rem;color:#6b7280;line-height:1.4;}
+    .sys-badge{display:inline-block;font-size:.7rem;font-weight:600;border-radius:999px;padding:.2rem .65rem;margin-top:.3rem;}
+    .sys-card.consulting .sys-badge{background:rgba(134,184,33,.15);color:#4a7a12;}
+    .sys-card.petroleum .sys-badge{background:rgba(214,175,69,.15);color:#a07b10;}
+    @media(max-width:420px){.sys-grid{grid-template-columns:1fr;}}
+    #selErr{margin-top:1rem;font-size:.88rem;color:#dc2626;display:none;}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <div class="brand">
+        <div class="brand-title">
+          <h1>Seleccionar sistema</h1>
+          <p>Elige el sistema al que deseas acceder</p>
+        </div>
+      </div>
+
+      <div class="sys-grid" id="sysGrid">
+        {% if "consulting" in brands %}
+        <a class="sys-card consulting" href="#" data-brand="consulting">
+          <div class="sys-icon">&#x1F3E2;</div>
+          <div class="sys-name">Consulting</div>
+          <div class="sys-sub">Gestion operativa y cumplimiento normativo para estaciones.</div>
+          <span class="sys-badge">Consulting Oil &amp; Gas</span>
+        </a>
+        {% endif %}
+        {% if "petroleum" in brands %}
+        <a class="sys-card petroleum" href="#" data-brand="petroleum">
+          <div class="sys-icon">&#x26FD;</div>
+          <div class="sys-name">Petroleum</div>
+          <div class="sys-sub">Inspeccion, control de vigencias y normativas por estacion.</div>
+          <span class="sys-badge">Petroleum Oil &amp; Gas</span>
+        </a>
+        {% endif %}
+      </div>
+      <div id="selErr"></div>
+
+      <div class="meta-row" style="margin-top:1.5rem;">
+        <span><span class="dot"></span>Conexion segura</span>
+        <span>Acceso por rol y estacion</span>
+      </div>
+    </div>
+
+    <div class="footer-note">
+      Sistema Corporativo <strong>v5.0 Corporate</strong> &middot; Plataforma multi-empresa
+    </div>
+  </div>
+
+  <div id="toast" class="toast"><div class="t"></div><div class="b"></div></div>
+
+  <script>
+    var CSRF = (document.querySelector('meta[name=csrf-token]') || {}).getAttribute('content') || '';
+    document.getElementById('sysGrid').addEventListener('click', function(ev){
+      var card = ev.target.closest('[data-brand]');
+      if (!card) return;
+      ev.preventDefault();
+      selectBrand(card.getAttribute('data-brand'));
+    });
+    async function selectBrand(brand){
+      var errEl = document.getElementById('selErr');
+      errEl.style.display = 'none';
+      try{
+        var res = await fetch('/api/set-brand', {
+          method: 'POST', credentials: 'include',
+          headers: {'Content-Type':'application/json','X-CSRF-Token':CSRF},
+          body: JSON.stringify({brand: brand})
+        });
+        var data = await res.json().catch(function(){ return {}; });
+        if (data.ok){ location.href = data.redirect || '/hub'; }
+        else { errEl.textContent = 'No tienes acceso a ese sistema: ' + (data.error || ''); errEl.style.display = 'block'; }
+      }catch(e){
+        errEl.textContent = 'Error al seleccionar sistema: ' + e.message;
+        errEl.style.display = 'block';
+      }
+    }
+  </script>
+</body>
+</html>

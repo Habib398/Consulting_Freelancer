@@ -1,56 +1,67 @@
-/* login.js – Lógica de la pantalla de inicio de sesión */
+/* login.js – Logica de la pantalla de inicio de sesion */
 
-async function api(path, opts = {}) {
-  const headers = opts.headers || {};
+async function api(path, opts) {
+  opts = opts || {};
+  var headers = opts.headers || {};
   try{
-    const meta = document.querySelector('meta[name="csrf-token"]');
-    const token = meta ? meta.getAttribute('content') : "";
-    if (token) headers["X-CSRF-Token"] = token;
+    var meta = document.querySelector('meta[name=csrf-token]');
+    var token = meta ? meta.getAttribute('content') : '';
+    if (token) headers['X-CSRF-Token'] = token;
   }catch(e){}
-  headers["Content-Type"] = "application/json";
-  const res = await fetch(path, { credentials: "include", ...opts, headers });
-  const data = await res.json().catch(()=> ({}));
-  if (!res.ok) throw new Error(data.error || "http_"+res.status);
+  headers['Content-Type'] = 'application/json';
+  var res = await fetch(path, Object.assign({ credentials: 'include' }, opts, { headers: headers }));
+  var data = await res.json().catch(function(){ return {}; });
+  if (!res.ok) throw new Error(data.error || 'http_'+res.status);
   return data;
 }
 
-const err = document.getElementById("err");
-const btn = document.getElementById("btn");
-const form = document.getElementById("loginForm");
-const togglePw = document.getElementById("togglePw");
-const inputPw = document.getElementById("p");
+var err = document.getElementById('err');
+var btn = document.getElementById('btn');
+var form = document.getElementById('loginForm');
+var togglePw = document.getElementById('togglePw');
+var inputPw = document.getElementById('p');
 
-togglePw.addEventListener("click", () => {
-  const isPw = inputPw.type === "password";
-  inputPw.type = isPw ? "text" : "password";
-  togglePw.textContent = isPw ? "Ocultar" : "Mostrar";
+togglePw.addEventListener('click', function() {
+  var isPw = inputPw.type === 'password';
+  inputPw.type = isPw ? 'text' : 'password';
+  togglePw.textContent = isPw ? 'Ocultar' : 'Mostrar';
 });
 
 async function doLogin(){
-  err.classList.remove("show");
-  err.textContent = "";
+  err.classList.remove('show');
+  err.textContent = '';
   btn.disabled = true;
-  const originalHtml = btn.innerHTML;
+  var originalHtml = btn.innerHTML;
   btn.innerHTML = '<span>Verificando...</span>';
   try{
-    await api("/api/auth/login",{method:"POST",body:JSON.stringify({username:document.getElementById("u").value,password:document.getElementById("p").value})});
-    const me = await api("/api/me");
-    // Always consulting — no brand selector needed
-    try{
-      const brandRes = await api("/api/set-brand",{method:"POST",body:JSON.stringify({brand:"consulting"})});
-      location.href = brandRes.redirect || "/hub";
-    }catch(_e){
-      location.href = "/hub";
+    await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: document.getElementById('u').value, password: document.getElementById('p').value }) });
+    var meResp = await api('/api/me');
+    var me = meResp.me || meResp;
+
+    var rawBrands = ((me.allowed_brands || 'consulting') + '').split(',').map(function(b){ return b.trim(); }).filter(Boolean);
+    var validBrands = ['consulting','petroleum'];
+    var allowed = rawBrands.filter(function(b){ return validBrands.indexOf(b) >= 0; });
+
+    if (me.role === 'admin' || allowed.length > 1) {
+      location.href = '/select-system';
+    } else {
+      var brand = allowed[0] || 'consulting';
+      try{
+        var brandRes = await api('/api/set-brand', { method: 'POST', body: JSON.stringify({ brand: brand }) });
+        location.href = brandRes.redirect || '/hub';
+      }catch(e2){
+        location.href = '/hub';
+      }
     }
   }catch(e){
-    err.textContent = "No se pudo iniciar sesión: " + e.message;
-    err.classList.add("show");
+    err.textContent = 'No se pudo iniciar sesion: ' + e.message;
+    err.classList.add('show');
     btn.disabled = false;
     btn.innerHTML = originalHtml;
   }
 }
 
-form.addEventListener("submit", (ev)=>{
+form.addEventListener('submit', function(ev){
   ev.preventDefault();
   doLogin();
 });

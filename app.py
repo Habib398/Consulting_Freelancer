@@ -53,6 +53,7 @@ import modules.operations as mod_operations
 import modules.compliance as mod_compliance
 import modules.admin as mod_admin
 import modules.messaging as mod_messaging
+import modules.petroleum as mod_petroleum
 
 
 def _setup_logging(app: Flask, base_dir: Path) -> None:
@@ -182,8 +183,11 @@ def create_app() -> Flask:
 
     @app.before_request
     def _enforce_brand_access():
-        """Garantiza que el brand activo en sesión sea siempre consulting."""
-        session["brand"] = "consulting"
+        """Garantiza que el brand en sesión sea siempre uno válido; si no lo es, lo normaliza a 'consulting'."""
+        from services.brand import VALID_BRANDS
+        b = (session.get("brand") or "consulting").strip().lower()
+        if b not in VALID_BRANDS:
+            session["brand"] = "consulting"
 
     @app.before_request
     def _enforce_write_rate_limit():
@@ -404,13 +408,16 @@ def create_app() -> Flask:
     mod_compliance.register(app)  # Documentos, normativas, CAPA y auditoría
     mod_admin.register(app)       # Admin, reportes, analítica y organigrama
     mod_messaging.register(app)   # Chat segmentado (operativo e interno)
+    mod_petroleum.register(app)   # Rutas alias para el brand Petroleum (/petroleum/*)
 
     # Inyecta CSRF token + branding + sección activa en todos los templates
     @app.context_processor
     def _inject_csrf():
+        _brand = (session.get("brand") or "consulting").strip().lower()
         return {
             "csrf_token": getattr(g, "csrf_token", ""),
-            "brand_settings": get_branding_settings("consulting"),
+            "brand": _brand,
+            "brand_settings": get_branding_settings(_brand),
             "brand_cfg": get_branding_settings,
             "norm_cfg": get_normative_config,
             "norm_items": get_normative_items,
