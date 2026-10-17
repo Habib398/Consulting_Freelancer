@@ -19,6 +19,7 @@ from services.brand import get_brand
 
 # Decoradores de autenticación compartidos (desacoplados de ctx)
 from modules.auth.auth import login_required, role_required
+from modules.messaging.chat import ensure_station_room
 
 # ─── Blueprint ────────────────────────────────────────────────────────────────
 bp = Blueprint("stations", __name__)
@@ -139,6 +140,7 @@ def api_station_create():
          data.get("state"), data.get("city"), data.get("address"), lat, lng, "active", data.get("monthly_end")),
     )
     sid = cur.lastrowid
+    ensure_station_room(conn, brand, sid, name)
     conn.commit()
     conn.close()
     me = ctx.get_me()
@@ -352,6 +354,7 @@ def api_stations_import_kml():
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')",
                 (brand, name, code, None, None, None, lat_kml, lng_kml),
             )
+            ensure_station_room(conn, brand, cur.lastrowid, name)
             created.append({"name": name, "code": code, "lat": lat_kml, "lng": lng_kml})
         conn.commit()
         conn.close()

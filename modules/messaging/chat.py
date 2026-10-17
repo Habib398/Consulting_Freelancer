@@ -64,6 +64,33 @@ def _rooms_for_user(conn, brand: str, user_id: int, role: str, station_id) -> li
     return [dict(r) for r in cur.fetchall()]
 
 
+def ensure_station_room(conn, brand: str, station_id: int, station_name: str) -> None:
+    """Crea la sala operativa de una estacion si aun no existe. No hace commit."""
+    exists = conn.execute(
+        "SELECT 1 FROM chat_rooms WHERE brand=? AND kind='operative' AND station_id=? LIMIT 1",
+        (brand, station_id),
+    ).fetchone()
+    if not exists:
+        conn.execute(
+            "INSERT INTO chat_rooms (brand, kind, station_id, name) VALUES (?,?,?,?)",
+            (brand, "operative", station_id, f"Estación: {station_name}"),
+        )
+
+
+def _backfill_station_rooms() -> None:
+    """Crea salas para estaciones dadas de alta antes de que el alta creara la sala."""
+    with db_conn() as conn:
+        rows = conn.execute(
+            "SELECT s.id, s.brand, s.name FROM stations s "
+            "WHERE NOT EXISTS (SELECT 1 FROM chat_rooms r "
+            "  WHERE r.kind='operative' AND r.station_id=s.id AND r.brand=s.brand)"
+        ).fetchall()
+        for r in rows:
+            ensure_station_room(conn, r["brand"], r["id"], r["name"])
+        if rows:
+            conn.commit()
+
+
 def _messages_for_room(conn, room_id: int, limit: int = 80, since: str | None = None) -> list[dict]:
     cur = conn.cursor()
     sql = (
@@ -317,6 +344,12 @@ def register(app):
                         (room_id, uid),
                     )
                     conn.commit()
+
+    # Reparar estaciones existentes sin sala (creadas antes de este ajuste)
+    try:
+        _backfill_station_rooms()
+    except Exception:
+        app.logger.exception("No se pudieron crear las salas de chat faltantes")
 
     # Registrar eventos solo si SocketIO esta activo
     try:
